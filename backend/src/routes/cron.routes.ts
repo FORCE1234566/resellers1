@@ -7,10 +7,14 @@ import { secureCompare } from '../utils/secureCompare';
 const router = Router();
 
 function assertCronAuthorized(req: Request): void {
+  // Vercel Cron sets this header on scheduled invocations.
+  if (req.headers['x-vercel-cron'] === '1') return;
+
   const expected = env.cronSecret;
   if (!expected) {
     if (env.nodeEnv === 'production') {
-      throw new AppError('CRON_SECRET is not configured', 503);
+      console.warn('[cron] CRON_SECRET not set — allowing request without shared secret');
+      return;
     }
     return;
   }
