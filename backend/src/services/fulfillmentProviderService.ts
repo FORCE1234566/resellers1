@@ -25,7 +25,8 @@ import { normalizeOrderStatus } from '../utils/orderStatus';
 import {
   SUBMITTED_FOR_VERIFICATION,
   VERIFIED_PROVIDER_STATUS,
-  applySmartDataHubVerificationOnAccept,
+  applySmartDataHubVerificationOnExtracted,
+  isExtractedStatus,
   isBeneficiaryVerificationTriggerStatus,
   markBeneficiaryVerified,
   shouldPreserveSubmittedForVerification,
@@ -321,19 +322,15 @@ async function submitToSmartDataHub(order: IOrder): Promise<IOrder | null> {
     });
 
     const data = response.data;
-    const verification = await applySmartDataHubVerificationOnAccept(order);
-
     return applyOrderStatusUpdate(order, {
       status: 'processing',
-      providerStatus: verification.providerStatus,
+      providerStatus: 'gateway_processing',
       fulfillmentProvider: 'smartdatahub',
       providerBatchId: data.batch_id,
       providerOrderId: data.batch_id,
       providerReference: data.order_number || order.orderId,
-      stepLabel: verification.stepLabel,
-      stepMessage: data.message
-        ? `${verification.stepMessage} (${clientStepMessage(data.message)})`
-        : verification.stepMessage,
+      stepLabel: 'Gateway Processing',
+      stepMessage: data.message ? clientStepMessage(data.message) : 'Order submitted for processing',
     });
   } catch (err) {
     if (err instanceof SmartDataHubError && err.statusCode === 402) {
@@ -502,7 +499,9 @@ function resolveBulkStatus(data: {
   if (orders.length === 0) return '';
   if (orders.every((o) => o.status === 'delivered')) return 'completed';
   if (orders.some((o) => o.status === 'failed')) return 'failed';
-  // Prefer verification/extracted statuses when present
+  // Prefer extracted status when present (triggers verification email)
+  const extractedLine = orders.find((o) => isExtractedStatus(o.status));
+  if (extractedLine?.status) return extractedLine.status;
   const verificationLine = orders.find((o) =>
     isBeneficiaryVerificationTriggerStatus(o.status)
   );
@@ -517,7 +516,8 @@ function resolveSyncedProviderStatus(
   const normalizedRaw = rawStatus.toLowerCase().replace(/\s+/g, '_');
   const mappedStatus = mapProviderStatus(rawStatus);
 
-  if (isBeneficiaryVerificationTriggerStatus(normalizedRaw)) {
+  // Only "extracted" enters the verification display state (email sent separately).
+  if (isExtractedStatus(normalizedRaw)) {
     return {
       status: 'processing',
       providerStatus: SUBMITTED_FOR_VERIFICATION,
@@ -585,11 +585,8 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
     const line = payload.orders?.[0];
     const resolved = resolveSyncedProviderStatus(order, rawStatus);
 
-    if (
-      resolved.providerStatus === SUBMITTED_FOR_VERIFICATION &&
-      order.providerStatus !== SUBMITTED_FOR_VERIFICATION
-    ) {
-      await applySmartDataHubVerificationOnAccept(order);
+    if (isExtractedStatus(rawStatus)) {
+      await applySmartDataHubVerificationOnExtracted(order);
     }
 
     const updated = await applyOrderStatusUpdate(order, {
@@ -820,12 +817,8 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
 
   const resolved = resolveSyncedProviderStatus(order, rawStatus);
 
-  if (
-    order.fulfillmentProvider === 'smartdatahub' &&
-    resolved.providerStatus === SUBMITTED_FOR_VERIFICATION &&
-    order.providerStatus !== SUBMITTED_FOR_VERIFICATION
-  ) {
-    await applySmartDataHubVerificationOnAccept(order);
+  if (order.fulfillmentProvider === 'smartdatahub' && isExtractedStatus(rawStatus)) {
+    await applySmartDataHubVerificationOnExtracted(order);
   }
 
   const updated = await applyOrderStatusUpdate(order, {

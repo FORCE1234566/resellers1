@@ -19,6 +19,12 @@ const VERIFICATION_TRIGGER_STATUSES = new Set([
   'unverified',
 ]);
 
+/** Email is sent only when Smart Data Hub reports the number as extracted. */
+export function isExtractedStatus(raw?: string | null): boolean {
+  if (!raw?.trim()) return false;
+  return raw.toLowerCase().replace(/\s+/g, '_') === 'extracted';
+}
+
 export function normalizeBeneficiaryPhone(phone: string): string {
   try {
     return normalizeGhanaPhone(phone);
@@ -191,30 +197,37 @@ export async function autoVerifyAgedBeneficiaries(limit = 100): Promise<number> 
   return updated;
 }
 
-export async function applySmartDataHubVerificationOnAccept(order: IOrder): Promise<{
+/**
+ * Apply MTN verification state when Smart Data Hub reports the number as extracted.
+ * The buyer email is sent only for the extracted status (once per number).
+ */
+export async function applySmartDataHubVerificationOnExtracted(order: IOrder): Promise<{
   providerStatus: string;
   stepLabel: string;
   stepMessage: string;
+  emailSent: boolean;
 }> {
   const isMtn = String(order.network).toUpperCase() === 'MTN';
   if (!isMtn) {
     return {
-      providerStatus: 'gateway_processing',
-      stepLabel: 'Gateway Processing',
-      stepMessage: 'Order submitted for processing',
+      providerStatus: SUBMITTED_FOR_VERIFICATION,
+      stepLabel: 'Submitted for Verification',
+      stepMessage: 'Number submitted for network verification.',
+      emailSent: false,
     };
   }
 
   const alreadyVerified = await isBeneficiaryVerified(order.recipientPhone, order.network);
   if (alreadyVerified) {
     return {
-      providerStatus: 'gateway_processing',
-      stepLabel: 'Gateway Processing',
-      stepMessage: 'Order submitted for processing (number already verified)',
+      providerStatus: VERIFIED_PROVIDER_STATUS,
+      stepLabel: 'Number Verified',
+      stepMessage: 'Number already verified — order processing normally.',
+      emailSent: false,
     };
   }
 
-  await markBeneficiarySubmittedForVerification({
+  const result = await markBeneficiarySubmittedForVerification({
     phone: order.recipientPhone,
     network: order.network,
     orderId: order.orderId,
@@ -227,5 +240,6 @@ export async function applySmartDataHubVerificationOnAccept(order: IOrder): Prom
     stepLabel: 'Submitted for Verification',
     stepMessage:
       'This number is not verified on our system. It has been submitted to MTN for verification (24–144 hours). Subsequent orders will come faster after verification.',
+    emailSent: result.emailSent,
   };
 }
