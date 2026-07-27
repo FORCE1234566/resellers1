@@ -29,6 +29,7 @@ export function inferOrderStatusFromProvider(providerStatus?: string | null): Or
       'processing',
       'in_progress',
       'placed',
+      'exported',
       'extracted',
       'submitted_for_verification',
       'awaiting_verification',

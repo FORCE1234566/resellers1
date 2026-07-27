@@ -32,6 +32,7 @@ export const STATUS_STYLES: Record<string, string> = {
   gateway_processing: 'bg-cyan-100 text-cyan-800 border-cyan-200',
   awaiting_provider_balance: 'bg-orange-100 text-orange-800 border-orange-200',
   submitted_for_verification: 'bg-amber-100 text-amber-900 border-amber-300',
+  exported: 'bg-amber-100 text-amber-900 border-amber-300',
   extracted: 'bg-amber-100 text-amber-900 border-amber-300',
   verified: 'bg-teal-100 text-teal-800 border-teal-200',
 };
@@ -44,6 +45,7 @@ export function formatOrderStatusLabel(status?: string | null, providerStatus?: 
 
   if (
     providerStatus === 'submitted_for_verification' ||
+    providerStatus === 'exported' ||
     providerStatus === 'extracted' ||
     providerStatus === 'awaiting_verification' ||
     providerStatus === 'verification_pending' ||
@@ -103,6 +105,7 @@ export function matchesStatusFilter(
   if (filter === 'verification') {
     return (
       providerStatus === 'submitted_for_verification' ||
+      providerStatus === 'exported' ||
       providerStatus === 'extracted' ||
       providerStatus === 'awaiting_verification' ||
       providerStatus === 'verification_pending' ||
@@ -116,6 +119,7 @@ export function matchesStatusFilter(
       providerStatus !== 'submitting_to_api' &&
       providerStatus !== 'awaiting_provider_balance' &&
       providerStatus !== 'submitted_for_verification' &&
+      providerStatus !== 'exported' &&
       providerStatus !== 'extracted' &&
       providerStatus !== 'verified'
     );

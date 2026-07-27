@@ -12,6 +12,7 @@ export const SUBMITTED_FOR_VERIFICATION = 'submitted_for_verification';
 export const VERIFIED_PROVIDER_STATUS = 'verified';
 
 const VERIFICATION_TRIGGER_STATUSES = new Set([
+  'exported',
   'extracted',
   'submitted_for_verification',
   'awaiting_verification',
@@ -19,10 +20,11 @@ const VERIFICATION_TRIGGER_STATUSES = new Set([
   'unverified',
 ]);
 
-/** Email is sent only when Smart Data Hub reports the number as extracted. */
-export function isExtractedStatus(raw?: string | null): boolean {
+/** Email is sent only when Smart Data Hub reports the number as exported. */
+export function isExportedStatus(raw?: string | null): boolean {
   if (!raw?.trim()) return false;
-  return raw.toLowerCase().replace(/\s+/g, '_') === 'extracted';
+  const normalized = raw.toLowerCase().replace(/\s+/g, '_');
+  return normalized === 'exported' || normalized === 'extracted';
 }
 
 export function normalizeBeneficiaryPhone(phone: string): string {
@@ -198,10 +200,10 @@ export async function autoVerifyAgedBeneficiaries(limit = 100): Promise<number> 
 }
 
 /**
- * Apply MTN verification state when Smart Data Hub reports the number as extracted.
- * The buyer email is sent only for the extracted status (once per number).
+ * Apply MTN verification state when Smart Data Hub reports the number as exported.
+ * The buyer email is sent only for the exported status (once per number).
  */
-export async function applySmartDataHubVerificationOnExtracted(order: IOrder): Promise<{
+export async function applySmartDataHubVerificationOnExported(order: IOrder): Promise<{
   providerStatus: string;
   stepLabel: string;
   stepMessage: string;
