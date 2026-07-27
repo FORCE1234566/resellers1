@@ -309,3 +309,39 @@ export const sendCheckerDeliveryEmail = async (
   `;
   await sendEmail(email, subject, html);
 };
+
+export const sendMtnNumberVerificationEmail = async (
+  email: string,
+  input: { phone: string; orderId: string }
+): Promise<void> => {
+  const subject = `MTN number verification in progress — ${PLATFORM_NAME}`;
+  const text = [
+    `${PLATFORM_NAME} — MTN number verification`,
+    '',
+    `Order: ${input.orderId}`,
+    `Number: ${input.phone}`,
+    '',
+    'This number is not verified on our system, so it has been submitted to MTN for verification.',
+    'Verification usually takes 24–144 hours.',
+    'After verification, subsequent orders for this number will come faster.',
+    '',
+    'Thank you for your patience.',
+  ].join('\n');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:16px;">
+      <h2 style="color:#1e40af;margin:0 0 12px;">MTN number verification</h2>
+      <p style="color:#374151;margin:0 0 12px;">
+        This number (<strong>${input.phone}</strong>) is not verified on our system, so it has been
+        submitted to MTN for verification.
+      </p>
+      <p style="color:#374151;margin:0 0 12px;">
+        Verification will take <strong>24–144 hours</strong>. After verification, subsequent orders
+        for this number will come fast.
+      </p>
+      <p style="color:#6b7280;font-size:13px;margin:0;">Order reference: <strong>${input.orderId}</strong></p>
+    </div>
+  `;
+
+  await dispatchPriorityEmail({ to: email, subject, text, html });
+};

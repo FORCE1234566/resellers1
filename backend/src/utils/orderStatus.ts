@@ -28,6 +28,13 @@ export function inferOrderStatusFromProvider(providerStatus?: string | null): Or
       'submitting',
       'processing',
       'in_progress',
+      'placed',
+      'extracted',
+      'submitted_for_verification',
+      'awaiting_verification',
+      'verification_pending',
+      'unverified',
+      'verified',
     ].includes(p)
   ) {
     return 'processing';

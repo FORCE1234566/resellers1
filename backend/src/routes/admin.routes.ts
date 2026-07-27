@@ -877,7 +877,7 @@ router.get('/orders', asyncHandler(async (req, res) => {
   if (searchFilter) Object.assign(filter, searchFilter);
 
   // Refresh provider statuses in background — never block the list response.
-  void syncFulfillmentStatuses({}, 15).catch(() => {});
+  void syncFulfillmentStatuses({}, 40).catch(() => {});
 
   const [orders, total] = await Promise.all([
     Order.find(filter)

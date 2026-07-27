@@ -22,6 +22,14 @@ import {
 } from './datamaxClient';
 import { isAfaProduct, AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '../config/afa';
 import { normalizeOrderStatus } from '../utils/orderStatus';
+import {
+  SUBMITTED_FOR_VERIFICATION,
+  VERIFIED_PROVIDER_STATUS,
+  applySmartDataHubVerificationOnAccept,
+  isBeneficiaryVerificationTriggerStatus,
+  markBeneficiaryVerified,
+  shouldPreserveSubmittedForVerification,
+} from './beneficiaryVerificationService';
 
 export interface StatusHistoryEntry {
   step: string;
@@ -62,7 +70,17 @@ export const mapProviderStatus = (raw: string): OrderStatus => {
   if (['failed', 'error', 'rejected'].includes(s)) return 'failed';
   if (['cancelled', 'canceled'].includes(s)) return 'cancelled';
   if (['refunded'].includes(s)) return 'refunded';
-  if (['pending', 'awaiting', 'created', 'awaiting_provider_balance'].includes(s)) return 'pending';
+  if (
+    [
+      'pending',
+      'awaiting',
+      'created',
+      'awaiting_provider_balance',
+    ].includes(s)
+  ) {
+    return 'pending';
+  }
+  // extracted / verification / placed / processing all stay in-flight
   return 'processing';
 };
 
@@ -73,7 +91,11 @@ export const displayProviderStatus = (providerStatus?: string, status?: OrderSta
     submitting: 'submitting_to_api',
     gateway_processing: 'gateway_processing',
     awaiting_provider_balance: 'awaiting_provider_balance',
+    submitted_for_verification: SUBMITTED_FOR_VERIFICATION,
+    extracted: SUBMITTED_FOR_VERIFICATION,
+    verified: VERIFIED_PROVIDER_STATUS,
     in_progress: 'processing',
+    placed: 'processing',
   };
   return labels[providerStatus.toLowerCase()] || providerStatus;
 };
@@ -299,15 +321,19 @@ async function submitToSmartDataHub(order: IOrder): Promise<IOrder | null> {
     });
 
     const data = response.data;
+    const verification = await applySmartDataHubVerificationOnAccept(order);
+
     return applyOrderStatusUpdate(order, {
       status: 'processing',
-      providerStatus: 'gateway_processing',
+      providerStatus: verification.providerStatus,
       fulfillmentProvider: 'smartdatahub',
       providerBatchId: data.batch_id,
       providerOrderId: data.batch_id,
       providerReference: data.order_number || order.orderId,
-      stepLabel: 'Gateway Processing',
-      stepMessage: data.message ? clientStepMessage(data.message) : 'Order submitted for processing',
+      stepLabel: verification.stepLabel,
+      stepMessage: data.message
+        ? `${verification.stepMessage} (${clientStepMessage(data.message)})`
+        : verification.stepMessage,
     });
   } catch (err) {
     if (err instanceof SmartDataHubError && err.statusCode === 402) {
@@ -476,7 +502,64 @@ function resolveBulkStatus(data: {
   if (orders.length === 0) return '';
   if (orders.every((o) => o.status === 'delivered')) return 'completed';
   if (orders.some((o) => o.status === 'failed')) return 'failed';
+  // Prefer verification/extracted statuses when present
+  const verificationLine = orders.find((o) =>
+    isBeneficiaryVerificationTriggerStatus(o.status)
+  );
+  if (verificationLine?.status) return verificationLine.status;
   return orders[0]?.status || 'processing';
+}
+
+function resolveSyncedProviderStatus(
+  order: IOrder,
+  rawStatus: string
+): { status: OrderStatus; providerStatus: string; stepLabel: string; stepMessage: string } {
+  const normalizedRaw = rawStatus.toLowerCase().replace(/\s+/g, '_');
+  const mappedStatus = mapProviderStatus(rawStatus);
+
+  if (isBeneficiaryVerificationTriggerStatus(normalizedRaw)) {
+    return {
+      status: 'processing',
+      providerStatus: SUBMITTED_FOR_VERIFICATION,
+      stepLabel: 'Submitted for Verification',
+      stepMessage:
+        'Number submitted to MTN for verification (24–144 hours). Subsequent orders will be faster after verification.',
+    };
+  }
+
+  if (shouldPreserveSubmittedForVerification(order.providerStatus, normalizedRaw)) {
+    return {
+      status: mappedStatus === 'pending' ? 'processing' : mappedStatus,
+      providerStatus: SUBMITTED_FOR_VERIFICATION,
+      stepLabel: 'Submitted for Verification',
+      stepMessage: `Still awaiting MTN verification (API: ${rawStatus})`,
+    };
+  }
+
+  if (mappedStatus === 'delivered') {
+    return {
+      status: 'delivered',
+      providerStatus: normalizedRaw,
+      stepLabel: 'Delivered',
+      stepMessage: `Delivery status: ${rawStatus}`,
+    };
+  }
+
+  if (mappedStatus === 'processing') {
+    return {
+      status: 'processing',
+      providerStatus: normalizedRaw === 'placed' ? 'processing' : normalizedRaw,
+      stepLabel: 'Processing',
+      stepMessage: `Delivery status: ${rawStatus}`,
+    };
+  }
+
+  return {
+    status: mappedStatus,
+    providerStatus: normalizedRaw,
+    stepLabel: 'Gateway Processing',
+    stepMessage: `Delivery status: ${rawStatus}`,
+  };
 }
 
 async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
@@ -500,15 +583,30 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
     if (!rawStatus) return order;
 
     const line = payload.orders?.[0];
-    return applyOrderStatusUpdate(order, {
-      status: mapProviderStatus(rawStatus),
-      providerStatus: rawStatus.toLowerCase().replace(/\s+/g, '_'),
+    const resolved = resolveSyncedProviderStatus(order, rawStatus);
+
+    if (
+      resolved.providerStatus === SUBMITTED_FOR_VERIFICATION &&
+      order.providerStatus !== SUBMITTED_FOR_VERIFICATION
+    ) {
+      await applySmartDataHubVerificationOnAccept(order);
+    }
+
+    const updated = await applyOrderStatusUpdate(order, {
+      status: resolved.status,
+      providerStatus: resolved.providerStatus,
       providerBatchId: payload.batch_id || order.providerBatchId,
       providerOrderId: line?.id || order.providerOrderId,
       providerReference: payload.order_number || order.providerReference,
-      stepLabel: 'Gateway Processing',
-      stepMessage: `Delivery status: ${rawStatus}`,
+      stepLabel: resolved.stepLabel,
+      stepMessage: resolved.stepMessage,
     });
+
+    if (resolved.status === 'delivered') {
+      await markBeneficiaryVerified(order.recipientPhone, order.network, order.orderId);
+    }
+
+    return updated;
   } catch (err) {
     if (err instanceof SmartDataHubError && err.statusCode === 404) {
       return submitOrderToProvider(order);
@@ -618,6 +716,37 @@ export async function syncFulfillmentStatuses(scope: FulfillmentScope = {}, limi
   }
 }
 
+/** Background job: sync in-flight orders from APIs and auto-verify aged MTN numbers. */
+export async function runFulfillmentBackgroundSync(limit = 80): Promise<{
+  synced: number;
+  verified: number;
+}> {
+  const { autoVerifyAgedBeneficiaries } = await import('./beneficiaryVerificationService');
+  await retryQueuedFulfillmentOrders(Math.min(limit, 40));
+
+  const orders = await Order.find({
+    status: { $in: ['pending', 'processing'] },
+  })
+    .sort({ updatedAt: 1 })
+    .limit(limit);
+
+  let synced = 0;
+  for (const order of orders) {
+    const beforeStatus = order.status;
+    const beforeProvider = order.providerStatus;
+    const updated = await syncOrderFromProvider(order);
+    if (
+      updated &&
+      (updated.status !== beforeStatus || updated.providerStatus !== beforeProvider)
+    ) {
+      synced++;
+    }
+  }
+
+  const verified = await autoVerifyAgedBeneficiaries(100);
+  return { synced, verified };
+}
+
 export async function getFulfillmentStatusCounts(scope: FulfillmentScope = {}) {
   const base = scopeFilter(scope);
   const [awaitingProviderBalance, submittingToApi] = await Promise.all([
@@ -689,15 +818,31 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
   const rawStatus = String(body.status || body.order_status || '');
   if (!rawStatus) return order;
 
-  return applyOrderStatusUpdate(order, {
-    status: mapProviderStatus(rawStatus),
-    providerStatus: rawStatus.toLowerCase().replace(/\s+/g, '_'),
+  const resolved = resolveSyncedProviderStatus(order, rawStatus);
+
+  if (
+    order.fulfillmentProvider === 'smartdatahub' &&
+    resolved.providerStatus === SUBMITTED_FOR_VERIFICATION &&
+    order.providerStatus !== SUBMITTED_FOR_VERIFICATION
+  ) {
+    await applySmartDataHubVerificationOnAccept(order);
+  }
+
+  const updated = await applyOrderStatusUpdate(order, {
+    status: resolved.status,
+    providerStatus: resolved.providerStatus,
     providerOrderId: String(body.provider_order_id || body.order_id || order.providerOrderId || ''),
     providerBatchId: String(body.batch_id || order.providerBatchId || ''),
     providerReference: String(
       body.provider_reference || body.order_api_reference || body.request_id || order.providerReference || ''
     ),
-    stepLabel: 'Gateway Processing',
-    stepMessage: `Provider update: ${rawStatus}`,
+    stepLabel: resolved.stepLabel,
+    stepMessage: resolved.stepMessage,
   });
+
+  if (resolved.status === 'delivered' && order.fulfillmentProvider === 'smartdatahub') {
+    await markBeneficiaryVerified(order.recipientPhone, order.network, order.orderId);
+  }
+
+  return updated;
 }

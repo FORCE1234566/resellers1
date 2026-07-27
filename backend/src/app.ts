@@ -26,6 +26,7 @@ import webhookRoutes, {
 } from './routes/webhook.routes';
 import supportRoutes from './routes/support.routes';
 import publicRoutes from './routes/public.routes';
+import cronRoutes from './routes/cron.routes';
 
 validateProductionEnv();
 
@@ -136,6 +137,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/v1/agent', agentApiRoutes);
 app.use('/api/v1/dealer', agentApiRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/cron', cronRoutes);
 
 app.use(errorHandler);
 

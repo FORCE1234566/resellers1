@@ -71,4 +71,5 @@ export const env = {
   },
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10),
+  cronSecret: process.env.CRON_SECRET || '',
 };

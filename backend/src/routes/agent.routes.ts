@@ -62,7 +62,7 @@ router.use(authenticate, authorize('agent'));
 // Dashboard
 router.get('/dashboard', asyncHandler(async (req: AuthRequest, res) => {
   const agentId = req.user!._id;
-  void syncFulfillmentStatuses({ agentId }, 15).catch(() => {});
+  void syncFulfillmentStatuses({ agentId }, 40).catch(() => {});
 
   const { startOfToday, startOfWeek, startOfMonth } = getDateRanges();
   const wallet = await getOrCreateWallet(agentId);

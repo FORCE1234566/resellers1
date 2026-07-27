@@ -5,5 +5,11 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "src/vercel.ts" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/fulfillment-sync",
+      "schedule": "*/5 * * * *"
+    }
   ]
 }

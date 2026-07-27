@@ -5,6 +5,7 @@ export type OrderStatusFilter =
   | 'pending'
   | 'submitting'
   | 'processing'
+  | 'verification'
   | 'delivered'
   | 'failed'
   | 'cancelled';
@@ -14,6 +15,7 @@ export const ORDER_STATUS_FILTERS: { id: OrderStatusFilter; label: string }[] = 
   { id: 'pending', label: 'Pending' },
   { id: 'submitting', label: 'Submitting to API' },
   { id: 'processing', label: 'Processing' },
+  { id: 'verification', label: 'Submitted for Verification' },
   { id: 'delivered', label: 'Delivered' },
   { id: 'failed', label: 'Failed' },
   { id: 'cancelled', label: 'Cancelled' },
@@ -29,9 +31,29 @@ export const STATUS_STYLES: Record<string, string> = {
   submitting_to_api: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   gateway_processing: 'bg-cyan-100 text-cyan-800 border-cyan-200',
   awaiting_provider_balance: 'bg-orange-100 text-orange-800 border-orange-200',
+  submitted_for_verification: 'bg-amber-100 text-amber-900 border-amber-300',
+  extracted: 'bg-amber-100 text-amber-900 border-amber-300',
+  verified: 'bg-teal-100 text-teal-800 border-teal-200',
 };
 
 export function formatOrderStatusLabel(status?: string | null, providerStatus?: string) {
+  if (status === 'delivered') return 'Delivered';
+  if (status === 'failed') return 'Failed';
+  if (status === 'cancelled') return 'Cancelled';
+  if (status === 'refunded') return 'Refunded';
+
+  if (
+    providerStatus === 'submitted_for_verification' ||
+    providerStatus === 'extracted' ||
+    providerStatus === 'awaiting_verification' ||
+    providerStatus === 'verification_pending' ||
+    providerStatus === 'unverified'
+  ) {
+    return 'Submitted for verification';
+  }
+  if (providerStatus === 'verified') {
+    return 'Verified';
+  }
   if (providerStatus === 'submitting_to_api' || providerStatus === 'submitting') {
     return 'Submitting to API';
   }
@@ -40,6 +62,9 @@ export function formatOrderStatusLabel(status?: string | null, providerStatus?: 
   }
   if (providerStatus === 'awaiting_provider_balance') {
     return 'Awaiting Provider Balance';
+  }
+  if (status === 'processing') {
+    return 'Processing';
   }
   if (status) {
     return status.replace(/_/g, ' ');
@@ -51,6 +76,10 @@ export function formatOrderStatusLabel(status?: string | null, providerStatus?: 
 }
 
 export function statusBadgeClass(status?: string | null, providerStatus?: string) {
+  if (status === 'delivered') return STATUS_STYLES.delivered;
+  if (status === 'failed') return STATUS_STYLES.failed;
+  if (status === 'cancelled') return STATUS_STYLES.cancelled;
+  if (status === 'refunded') return STATUS_STYLES.refunded;
   if (providerStatus && STATUS_STYLES[providerStatus]) {
     return STATUS_STYLES[providerStatus];
   }
@@ -71,11 +100,24 @@ export function matchesStatusFilter(
       providerStatus === 'awaiting_provider_balance'
     );
   }
+  if (filter === 'verification') {
+    return (
+      providerStatus === 'submitted_for_verification' ||
+      providerStatus === 'extracted' ||
+      providerStatus === 'awaiting_verification' ||
+      providerStatus === 'verification_pending' ||
+      providerStatus === 'unverified' ||
+      providerStatus === 'verified'
+    );
+  }
   if (filter === 'processing') {
     return (
       normalizedStatus === 'processing' &&
       providerStatus !== 'submitting_to_api' &&
-      providerStatus !== 'awaiting_provider_balance'
+      providerStatus !== 'awaiting_provider_balance' &&
+      providerStatus !== 'submitted_for_verification' &&
+      providerStatus !== 'extracted' &&
+      providerStatus !== 'verified'
     );
   }
   return normalizedStatus === filter;

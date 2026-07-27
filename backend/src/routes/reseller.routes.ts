@@ -61,7 +61,7 @@ router.use(authenticate, authorize('reseller'));
 // Dashboard
 router.get('/dashboard', asyncHandler(async (req: AuthRequest, res) => {
   const resellerId = req.user!._id;
-  void syncFulfillmentStatuses({ resellerId }, 15).catch(() => {});
+  void syncFulfillmentStatuses({ resellerId }, 40).catch(() => {});
 
   const { startOfToday, startOfWeek, startOfMonth } = getDateRanges();
   const wallet = await getOrCreateWallet(resellerId);
