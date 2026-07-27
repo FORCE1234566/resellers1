@@ -125,7 +125,7 @@ export default function AdminOrdersPage() {
     if (user?.role !== 'admin') return;
     const interval = setInterval(() => {
       loadOrders(true).catch(() => undefined);
-    }, 30000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [user, loadOrders]);
 

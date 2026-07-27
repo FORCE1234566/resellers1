@@ -105,7 +105,7 @@ export default function AgentOrdersPage() {
 
   useEffect(() => {
     if (user?.role !== 'agent') return;
-    const interval = setInterval(() => loadOrders(true), 30000);
+    const interval = setInterval(() => loadOrders(true), 15000);
     return () => clearInterval(interval);
   }, [user, loadOrders]);
 

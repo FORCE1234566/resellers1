@@ -9,7 +9,7 @@
   "crons": [
     {
       "path": "/api/cron/fulfillment-sync",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }

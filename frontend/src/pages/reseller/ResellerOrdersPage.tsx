@@ -86,7 +86,7 @@ export default function ResellerOrdersPage() {
 
   useEffect(() => {
     if (user?.role !== 'reseller') return;
-    const interval = setInterval(() => loadOrders(true), 30000);
+    const interval = setInterval(() => loadOrders(true), 15000);
     return () => clearInterval(interval);
   }, [user, loadOrders]);
 
