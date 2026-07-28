@@ -392,7 +392,9 @@ router.post('/api/request', asyncHandler(async (req: AuthRequest, res) => {
 }));
 
 router.get('/api/credentials', asyncHandler(async (req: AuthRequest, res) => {
-  const dealer = await User.findById(req.user!._id).select('+agentApi.secretKey');
+  const dealer = await User.findById(req.user!._id).select(
+    '+agentApi.secretKey +agentApi.secretKeyHash'
+  );
   if (!dealer) throw new AppError('Agent not found', 404);
   if (!isAgentApiApproved(dealer)) {
     throw new AppError('API access not approved yet', 403);
@@ -406,12 +408,13 @@ router.get('/api/credentials', asyncHandler(async (req: AuthRequest, res) => {
     await dealer.save();
   }
 
+  const hasHash = Boolean(dealer.agentApi?.secretKeyHash);
   res.json({
     success: true,
     data: {
       ...serializeAgentApiStatus(dealer),
       apiKey: dealer.agentApi?.apiKey,
-      secretKey: oneTimeSecret ?? (dealer.agentApi?.secretKeyHash ? '••••••••••••••••' : undefined),
+      secretKey: oneTimeSecret ?? (hasHash ? '••••••••••••••••' : undefined),
       ipWhitelist: dealer.agentApi?.ipWhitelist,
       webhookUrl: dealer.agentApi?.webhookUrl,
     },

@@ -120,6 +120,7 @@ export default function AgentApiPage() {
   const [settingsMsg, setSettingsMsg] = useState('');
   const [settingsError, setSettingsError] = useState('');
   const [requestError, setRequestError] = useState('');
+  const [credsError, setCredsError] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [submittingRequest, setSubmittingRequest] = useState(false);
 
@@ -135,6 +136,7 @@ export default function AgentApiPage() {
   }, []);
 
   const loadCreds = useCallback(() => {
+    setCredsError('');
     api
       .get('/agent/api/credentials')
       .then((res) => {
@@ -152,7 +154,8 @@ export default function AgentApiPage() {
         setIpWhitelist(Array.isArray(data.ipWhitelist) ? (data.ipWhitelist as string[]).join('\n') : '');
       })
       .catch((err) => {
-        if (err instanceof Error && err.message.includes('not approved')) return;
+        const message = err instanceof Error ? err.message : 'Failed to load credentials';
+        setCredsError(message);
         console.error(err);
       });
   }, []);
@@ -298,19 +301,28 @@ export default function AgentApiPage() {
             </div>
           </CardHeader>
           <CardBody className="space-y-4">
+            {credsError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-3">
+                {credsError}
+              </p>
+            )}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-medium text-gray-500 uppercase">API Key</p>
                 <CopyButton text={String(creds.apiKey || '')} />
               </div>
-              <code className="text-sm bg-gray-100 text-gray-900 p-3 rounded-lg block break-all">{creds.apiKey as string}</code>
+              <code className="text-sm bg-gray-100 text-gray-900 p-3 rounded-lg block break-all min-h-[2.75rem]">
+                {(creds.apiKey as string) || 'Loading…'}
+              </code>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-medium text-gray-500 uppercase">Secret Key</p>
                 <CopyButton text={String(creds.secretKey || '')} />
               </div>
-              <code className="text-sm bg-gray-100 text-gray-900 p-3 rounded-lg block break-all">{creds.secretKey as string}</code>
+              <code className="text-sm bg-gray-100 text-gray-900 p-3 rounded-lg block break-all min-h-[2.75rem]">
+                {(creds.secretKey as string) || 'Loading…'}
+              </code>
             </div>
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3">
               Never share your secret key publicly or commit it to source control.

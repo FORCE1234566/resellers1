@@ -84,19 +84,28 @@ export async function resolveStoreOwnerEmail(order: IOrder): Promise<string | un
   return accountEmail || supportEmail || undefined;
 }
 
+export async function resolveAgentEmail(order: IOrder): Promise<string | undefined> {
+  if (!order.agentId) return undefined;
+  const agent = await User.findById(order.agentId).select('email').lean();
+  if (!agent) return undefined;
+  const email = String(agent.email || '').trim().toLowerCase();
+  return email || undefined;
+}
+
 export async function markBeneficiarySubmittedForVerification(input: {
   phone: string;
   network: string;
   orderId: string;
   customerEmail?: string;
   storeOwnerEmail?: string;
+  agentEmail?: string;
   sendEmail?: boolean;
   /** Admin manual update — send even if an email was already sent for this number. */
   forceEmail?: boolean;
 }): Promise<{ status: BeneficiaryVerificationStatus; emailSent: boolean }> {
   const phone = normalizeBeneficiaryPhone(input.phone);
   const notifyEmails = [...new Set(
-    [input.customerEmail, input.storeOwnerEmail]
+    [input.customerEmail, input.storeOwnerEmail, input.agentEmail]
       .map((e) => String(e || '').trim().toLowerCase())
       .filter(Boolean)
   )];
@@ -284,12 +293,18 @@ export async function applySmartDataHubVerificationOnExported(order: IOrder): Pr
     };
   }
 
+  const [storeOwnerEmail, agentEmail] = await Promise.all([
+    resolveStoreOwnerEmail(order),
+    resolveAgentEmail(order),
+  ]);
+
   const result = await markBeneficiarySubmittedForVerification({
     phone: order.recipientPhone,
     network: order.network,
     orderId: order.orderId,
     customerEmail: order.customerEmail,
-    storeOwnerEmail: await resolveStoreOwnerEmail(order),
+    storeOwnerEmail,
+    agentEmail,
     sendEmail: true,
   });
 
@@ -309,12 +324,18 @@ export async function applyManualVerificationToOrder(order: IOrder): Promise<{
   stepMessage: string;
   emailSent: boolean;
 }> {
+  const [storeOwnerEmail, agentEmail] = await Promise.all([
+    resolveStoreOwnerEmail(order),
+    resolveAgentEmail(order),
+  ]);
+
   const result = await markBeneficiarySubmittedForVerification({
     phone: order.recipientPhone,
     network: order.network,
     orderId: order.orderId,
     customerEmail: order.customerEmail,
-    storeOwnerEmail: await resolveStoreOwnerEmail(order),
+    storeOwnerEmail,
+    agentEmail,
     sendEmail: true,
     forceEmail: true,
   });
@@ -323,7 +344,7 @@ export async function applyManualVerificationToOrder(order: IOrder): Promise<{
     providerStatus: SUBMITTED_FOR_VERIFICATION,
     stepLabel: 'Submitted for Verification',
     stepMessage:
-      'Admin marked this number for MTN verification (24–144 hours). The buyer and store owner have been notified by email when available.',
+      'Admin marked this number for MTN verification (24–144 hours). The buyer, store owner, and agent have been notified by email when available.',
     emailSent: result.emailSent,
   };
 }

@@ -9,10 +9,12 @@ export function getAgentApiApprovalStatus(agent: IUser): AgentApiApprovalStatus 
 }
 
 export function isAgentApiApproved(agent: IUser): boolean {
+  // Do not require secretKeyHash here — it is select:false and often absent on
+  // dashboard User queries. External API auth still verifies the hash separately.
   return (
     agent.agentApi?.approvalStatus === 'approved' &&
     agent.agentApi.isActive === true &&
-    Boolean(agent.agentApi.apiKey && agent.agentApi.secretKeyHash)
+    Boolean(agent.agentApi.apiKey)
   );
 }
 
@@ -165,13 +167,13 @@ export async function migrateAgentApiApproval(): Promise<void> {
     role: 'agent',
     agentApi: { $exists: true, $ne: null },
     $or: [{ 'agentApi.approvalStatus': { $exists: false } }, { 'agentApi.approvalStatus': null }],
-  });
+  }).select('+agentApi.secretKey +agentApi.secretKeyHash');
 
   let migrated = 0;
   for (const agent of agents) {
     if (!agent.agentApi) continue;
     try {
-      if (agent.agentApi.apiKey && agent.agentApi.secretKeyHash) {
+      if (agent.agentApi.apiKey && (agent.agentApi.secretKeyHash || agent.agentApi.secretKey)) {
         agent.agentApi.approvalStatus = 'approved';
         agent.agentApi.isActive = true;
       } else {
@@ -203,6 +205,9 @@ export function serializeAgentApiStatus(agent: IUser) {
     reviewedAt: api?.reviewedAt,
     requestMessage: api?.requestMessage,
     rejectionReason: api?.rejectionReason,
-    hasCredentials: Boolean(api?.apiKey && api?.secretKeyHash),
+    // secretKeyHash is select:false; treat issued apiKey + approved as having credentials.
+    hasCredentials: Boolean(
+      api?.apiKey && (api.secretKeyHash || api.approvalStatus === 'approved' || api.secretKey)
+    ),
   };
 }
