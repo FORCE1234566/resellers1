@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 
 export function FeatureCard({
   title,
@@ -43,6 +43,11 @@ export function ServiceCard({
   className?: string;
 }) {
   const shortName = name.split(' ')[0];
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
 
   return (
     <div
@@ -54,9 +59,14 @@ export function ServiceCard({
         className
       )}
     >
-      {imageUrl ? (
+      {imageUrl && !imageFailed ? (
         <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-gold/40 mb-5 group-hover:border-gold group-hover:shadow-md group-hover:shadow-gold/20 transition-all duration-300 bg-white">
-          <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+          <img
+            src={imageUrl}
+            alt={name}
+            className="w-full h-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
         </div>
       ) : (
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold/20 to-gold/5 border-2 border-gold/40 flex items-center justify-center mb-5 group-hover:border-gold group-hover:shadow-md group-hover:shadow-gold/20 transition-all duration-300">
