@@ -354,16 +354,21 @@ export const sendCheckerDeliveryEmail = async (
   email: string,
   input: { type: string; serial: string; pin: string; orderId: string }
 ): Promise<void> => {
-  const subject = `Your ${input.type} WAEC result checker — ${PLATFORM_NAME}`;
+  const resultsUrl = 'https://ghana.waecdirect.org/';
+  const subject = `Your ${input.type} result checker — ${PLATFORM_NAME}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:16px;">
       <h2 style="color:#1e40af;margin:0 0 12px;">${input.type} Result Checker</h2>
-      <p style="color:#374151;">Order <strong>${input.orderId}</strong></p>
-      <div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;">
+      <p style="color:#374151;margin:0 0 12px;">Order <strong>${input.orderId}</strong></p>
+      <div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:0 0 16px;">
         <p style="margin:0 0 8px;"><strong>Serial:</strong> ${input.serial}</p>
         <p style="margin:0;"><strong>PIN:</strong> ${input.pin}</p>
       </div>
-      <p style="color:#6b7280;font-size:13px;">Use these details on the WAEC results portal. Keep them private.</p>
+      <p style="color:#374151;margin:0 0 8px;">
+        Check your results using this link
+        <a href="${resultsUrl}" style="color:#1e40af;">${resultsUrl}</a>
+      </p>
+      <p style="color:#374151;margin:0;">Thank you for your purchase!</p>
     </div>
   `;
   await sendEmail(email, subject, html);

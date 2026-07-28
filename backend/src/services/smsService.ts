@@ -1,4 +1,3 @@
-import { env } from '../config/env';
 import { normalizeGhanaPhone } from '../utils/phone';
 
 export type CheckerSmsPayload = {
@@ -8,9 +7,15 @@ export type CheckerSmsPayload = {
 };
 
 const ARKESEL_SEND_URL = 'https://sms.arkesel.com/api/v2/sms/send';
+const WAEC_RESULTS_URL = 'https://ghana.waecdirect.org/';
 
-function buildCheckerMessage(payload: CheckerSmsPayload): string {
-  return `Your ${payload.type} WAEC checker — Serial: ${payload.serial}, PIN: ${payload.pin}. Use at the WAEC results portal. — ${env.platformName}`;
+export function buildCheckerMessage(payload: CheckerSmsPayload): string {
+  return [
+    `Serial: ${payload.serial}`,
+    `PIN: ${payload.pin}`,
+    `Check your results using this link ${WAEC_RESULTS_URL}`,
+    'Thank you for your purchase!',
+  ].join('\n');
 }
 
 /** Ghana local 0XXXXXXXXX → E.164-style 233XXXXXXXXX (no leading +). */
