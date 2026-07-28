@@ -35,9 +35,10 @@ function buildSignature(method: string, endpoint: string, body: string, timestam
 }
 
 export function mapNetworkToProviderCode(network: Network | string): string {
+  // Smart Data Hub expects "vodafone" for Telecel (former Vodafone Ghana).
   const map: Record<string, string> = {
     MTN: 'mtn',
-    Telecel: 'telecel',
+    Telecel: 'vodafone',
     AirtelTigo: 'at',
   };
   return map[network] || String(network).toLowerCase();

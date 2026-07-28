@@ -31,6 +31,7 @@ import { withMongoTransaction, sessionOpts } from '../utils/mongoTransaction';
 import { appendAuditLog } from './immutableAuditService';
 import { normalizeGhanaPhone, assertNetworkPhone } from '../utils/phone';
 import { redeemPromoCode } from './promoCodeService';
+import { sendAfaRegistrationAdminEmail } from '../utils/email';
 
 const getSettings = async () => {
   let settings = await Setting.findOne();
@@ -411,6 +412,25 @@ export const createOrder = async (input: CreateOrderInput) => {
         console.error('Order processing error:', err);
       }
     }, 5000);
+  }
+
+  if (isAfa && order.afaDetails) {
+    void sendAfaRegistrationAdminEmail({
+      orderId: order.orderId,
+      fullName: order.afaDetails.fullName,
+      phone: order.afaDetails.phone,
+      ghanaCard: order.afaDetails.ghanaCard,
+      location: order.afaDetails.location,
+      occupation: order.afaDetails.occupation,
+      customerEmail: order.customerEmail,
+      source: order.source,
+    }).catch((err) => {
+      console.error(
+        '[AFA admin notification email failed]',
+        order.orderId,
+        err instanceof Error ? err.message : err
+      );
+    });
   }
 
   return order;

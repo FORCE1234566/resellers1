@@ -291,6 +291,65 @@ export const sendNotificationEmail = async (
   await sendEmail(email, `${title} - ${PLATFORM_NAME}`, html);
 };
 
+export const sendAfaRegistrationAdminEmail = async (input: {
+  orderId: string;
+  fullName: string;
+  phone: string;
+  ghanaCard: string;
+  location: string;
+  occupation?: string;
+  customerEmail?: string;
+  source?: string;
+}): Promise<void> => {
+  const to = env.admin.email;
+  if (!to || to.includes('localhost')) {
+    console.warn('[AFA admin email] ADMIN_EMAIL is not configured for production');
+  }
+
+  const subject = `New MTN AFA registration order — ${input.orderId}`;
+  const text = [
+    `${PLATFORM_NAME} — MTN AFA registration order`,
+    '',
+    `Someone has placed an MTN AFA registration order.`,
+    '',
+    `Order: ${input.orderId}`,
+    `Name: ${input.fullName}`,
+    `Phone: ${input.phone}`,
+    `Ghana Card: ${input.ghanaCard}`,
+    `Location: ${input.location}`,
+    `Occupation: ${input.occupation || '—'}`,
+    `Customer email: ${input.customerEmail || '—'}`,
+    `Source: ${input.source || '—'}`,
+    '',
+    'Please process this AFA registration.',
+    '',
+    'Best regards,',
+    `${PLATFORM_NAME} Team`,
+  ].join('\n');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:16px;">
+      <h2 style="color:#1e40af;margin:0 0 12px;">New MTN AFA registration order</h2>
+      <p style="color:#374151;margin:0 0 12px;">
+        Someone has placed an <strong>MTN AFA registration</strong> order on ${PLATFORM_NAME}.
+      </p>
+      <div style="background:#f3f4f6;border-radius:8px;padding:14px;margin:0 0 16px;">
+        <p style="margin:0 0 6px;"><strong>Order:</strong> ${input.orderId}</p>
+        <p style="margin:0 0 6px;"><strong>Name:</strong> ${input.fullName}</p>
+        <p style="margin:0 0 6px;"><strong>Phone:</strong> ${input.phone}</p>
+        <p style="margin:0 0 6px;"><strong>Ghana Card:</strong> ${input.ghanaCard}</p>
+        <p style="margin:0 0 6px;"><strong>Location:</strong> ${input.location}</p>
+        <p style="margin:0 0 6px;"><strong>Occupation:</strong> ${input.occupation || '—'}</p>
+        <p style="margin:0 0 6px;"><strong>Customer email:</strong> ${input.customerEmail || '—'}</p>
+        <p style="margin:0;"><strong>Source:</strong> ${input.source || '—'}</p>
+      </div>
+      <p style="color:#6b7280;font-size:13px;margin:0;">Please process this AFA registration.</p>
+    </div>
+  `;
+
+  await dispatchPriorityEmail({ to, subject, text, html });
+};
+
 export const sendCheckerDeliveryEmail = async (
   email: string,
   input: { type: string; serial: string; pin: string; orderId: string }

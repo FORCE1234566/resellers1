@@ -12,6 +12,7 @@ import {
   mapNetworkToDatamaxCode,
   mapDatamaxVolume,
 } from '../services/datamaxClient.js';
+import { mapNetworkToProviderCode } from '../services/smartDataHubClient.js';
 import {
   getDatamaxMtnExpressCost,
   resolveOrderApiCost,
@@ -74,10 +75,26 @@ test('migrateFulfillmentSettings converts boolean routing', () => {
 
   assert.equal(dirty, true);
   assert.equal(settings.networkRouting.MTN, 'smartdatahub');
-  assert.equal(settings.networkRouting.Telecel, 'off');
+  assert.equal(settings.networkRouting.Telecel, 'smartdatahub');
   assert.equal(settings.networkRouting.AirtelTigo, 'smartdatahub');
   assert.equal(settings.defaultProvider, 'smartdatahub');
   assert.equal(settings.afaRouting, 'datamax');
+});
+
+test('migrateFulfillmentSettings forces Telecel off onto Smart Data Hub', () => {
+  const { settings, dirty } = migrateFulfillmentSettings({
+    enabled: true,
+    defaultProvider: 'smartdatahub',
+    networkRouting: {
+      MTN: 'smartdatahub',
+      Telecel: 'off',
+      AirtelTigo: 'off',
+    },
+    afaRouting: 'datamax',
+  });
+
+  assert.equal(dirty, true);
+  assert.equal(settings.networkRouting.Telecel, 'smartdatahub');
 });
 
 test('resolveAfaFulfillmentProviderFromSettings routes to Datamax or off', () => {
@@ -103,6 +120,12 @@ test('mapNetworkToDatamaxCode maps Ghana networks', () => {
   assert.equal(mapNetworkToDatamaxCode('MTN'), 'express');
   assert.equal(mapNetworkToDatamaxCode('Telecel'), 'telecel');
   assert.equal(mapNetworkToDatamaxCode('AirtelTigo'), 'airteltigo');
+});
+
+test('mapNetworkToProviderCode maps Telecel to vodafone for Smart Data Hub', () => {
+  assert.equal(mapNetworkToProviderCode('MTN'), 'mtn');
+  assert.equal(mapNetworkToProviderCode('Telecel'), 'vodafone');
+  assert.equal(mapNetworkToProviderCode('AirtelTigo'), 'at');
 });
 
 test('getDatamaxMtnExpressCost returns MTN Express dealer prices', () => {
