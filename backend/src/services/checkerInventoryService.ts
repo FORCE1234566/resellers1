@@ -152,6 +152,15 @@ export async function importCheckerInventory(
   return { imported, skippedDuplicates, skippedInvalid, uploadBatchId };
 }
 
+export async function clearCheckerInventory(type?: CheckerType): Promise<{
+  deleted: number;
+  type?: CheckerType;
+}> {
+  const filter = type ? { type } : {};
+  const result = await ResultChecker.deleteMany(filter);
+  return { deleted: result.deletedCount ?? 0, ...(type ? { type } : {}) };
+}
+
 export function maskSerial(serial: string): string {
   if (serial.length <= 4) return '****';
   return `${serial.slice(0, 2)}****${serial.slice(-2)}`;

@@ -79,7 +79,7 @@ import { getNetworkStockList, setNetworkStock } from '../services/networkStockSe
 import { getAfaStock, setAfaStock } from '../services/afaStockService';
 import { CheckerType, checkerTypeLabel, normalizeCheckerType } from '../config/checker';
 import { getCheckerSummary, setCheckerStock } from '../services/checkerStockService';
-import { importCheckerInventory, maskSerial } from '../services/checkerInventoryService';
+import { importCheckerInventory, clearCheckerInventory, maskSerial } from '../services/checkerInventoryService';
 import { ResultChecker } from '../models/ResultChecker';
 import fs from 'fs';
 import { resetPlatformForProduction } from '../services/productionResetService';
@@ -554,6 +554,35 @@ router.post(
     });
   })
 );
+
+/** Delete all checker inventory (or one type) so admin can upload a fresh batch. */
+router.delete('/checkers', asyncHandler(async (req: AuthRequest, res) => {
+  const typeRaw = req.query.type ? String(req.query.type) : '';
+  const type = typeRaw ? normalizeCheckerType(typeRaw) : undefined;
+  const result = await clearCheckerInventory(type);
+  if (!type || type === 'bece') {
+    try {
+      await setCheckerStock('bece', false);
+    } catch {
+      /* stock may already be empty */
+    }
+  }
+  if (!type || type === 'wassce') {
+    try {
+      await setCheckerStock('wassce', false);
+    } catch {
+      /* stock may already be empty */
+    }
+  }
+  await logAudit(req, 'delete', 'checker_inventory', type ? checkerTypeLabel(type) : 'all', result);
+  res.json({
+    success: true,
+    data: result,
+    message: type
+      ? `Deleted ${result.deleted} ${checkerTypeLabel(type)} checker(s)`
+      : `Deleted ${result.deleted} checker(s)`,
+  });
+}));
 
 router.get('/checkers', asyncHandler(async (req, res) => {
   const type = req.query.type ? normalizeCheckerType(String(req.query.type)) : undefined;

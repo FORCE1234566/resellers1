@@ -54,6 +54,7 @@ export default function AdminCheckersPage() {
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [toggling, setToggling] = useState<CheckerType | null>(null);
+  const [clearing, setClearing] = useState(false);
   const [filterType, setFilterType] = useState<CheckerType | ''>('');
   const [filterStatus, setFilterStatus] = useState<'available' | 'assigned' | ''>('');
 
@@ -112,6 +113,28 @@ export default function AdminCheckersPage() {
       alert(err instanceof Error ? err.message : 'Failed to update stock');
     } finally {
       setToggling(null);
+    }
+  };
+
+  const clearAllCheckers = async () => {
+    if (
+      !confirm(
+        'Delete ALL BECE and WASSCE checkers (available and used)? You will need to upload a new Excel file.'
+      )
+    ) {
+      return;
+    }
+    setClearing(true);
+    setUploadMsg('');
+    setUploadError('');
+    try {
+      const res = await api.delete('/admin/checkers');
+      setUploadMsg(res.data.message || `Deleted ${res.data.data?.deleted ?? 0} checker(s).`);
+      await load();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Failed to delete checkers');
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -220,6 +243,22 @@ export default function AdminCheckersPage() {
           <Upload className="w-4 h-4" />
           Upload checkers (Excel)
         </h2>
+        <div className="mb-4">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            loading={clearing}
+            disabled={clearing || pageLoading}
+            onClick={clearAllCheckers}
+            className="border-red-300 text-red-700 hover:bg-red-50"
+          >
+            Delete all checkers
+          </Button>
+          <p className="text-xs text-gray-500 mt-2">
+            Removes every BECE/WASSCE pin so you can upload a fresh batch.
+          </p>
+        </div>
         <form onSubmit={handleUpload} className="space-y-4 max-w-xl">
           <div className="flex gap-2">
             {(['bece', 'wassce'] as CheckerType[]).map((t) => (
