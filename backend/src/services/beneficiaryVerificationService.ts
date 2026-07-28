@@ -78,11 +78,32 @@ export async function markBeneficiarySubmittedForVerification(input: {
   orderId: string;
   customerEmail?: string;
   sendEmail?: boolean;
+  /** Admin manual update — send even if an email was already sent for this number. */
+  forceEmail?: boolean;
 }): Promise<{ status: BeneficiaryVerificationStatus; emailSent: boolean }> {
   const phone = normalizeBeneficiaryPhone(input.phone);
   const existing = await BeneficiaryVerification.findOne({ phone, network: input.network });
   if (existing?.status === 'verified') {
-    return { status: 'verified', emailSent: false };
+    let emailSent = false;
+    if (input.forceEmail && input.sendEmail !== false && input.customerEmail?.trim()) {
+      try {
+        await sendMtnNumberVerificationEmail(input.customerEmail.trim().toLowerCase(), {
+          phone,
+          orderId: input.orderId,
+        });
+        existing.verificationEmailSentAt = new Date();
+        existing.lastOrderId = input.orderId;
+        await existing.save();
+        emailSent = true;
+      } catch (err) {
+        console.error(
+          '[MTN verification email failed]',
+          input.customerEmail,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+    return { status: 'verified', emailSent };
   }
 
   const now = new Date();
@@ -105,7 +126,7 @@ export async function markBeneficiarySubmittedForVerification(input: {
   const shouldEmail =
     input.sendEmail !== false &&
     Boolean(input.customerEmail?.trim()) &&
-    !record.verificationEmailSentAt;
+    (input.forceEmail === true || !record.verificationEmailSentAt);
 
   if (shouldEmail && input.customerEmail) {
     try {
@@ -242,6 +263,31 @@ export async function applySmartDataHubVerificationOnExported(order: IOrder): Pr
     stepLabel: 'Submitted for Verification',
     stepMessage:
       'This number is not verified on our system. It has been submitted to MTN for verification (24–144 hours). Subsequent orders will come faster after verification.',
+    emailSent: result.emailSent,
+  };
+}
+
+/** Admin manually marks an order as submitted for verification and emails the buyer. */
+export async function applyManualVerificationToOrder(order: IOrder): Promise<{
+  providerStatus: string;
+  stepLabel: string;
+  stepMessage: string;
+  emailSent: boolean;
+}> {
+  const result = await markBeneficiarySubmittedForVerification({
+    phone: order.recipientPhone,
+    network: order.network,
+    orderId: order.orderId,
+    customerEmail: order.customerEmail,
+    sendEmail: true,
+    forceEmail: true,
+  });
+
+  return {
+    providerStatus: SUBMITTED_FOR_VERIFICATION,
+    stepLabel: 'Submitted for Verification',
+    stepMessage:
+      'Admin marked this number for MTN verification (24–144 hours). The buyer has been notified by email when available.',
     emailSent: result.emailSent,
   };
 }

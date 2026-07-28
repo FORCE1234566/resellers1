@@ -54,6 +54,10 @@ import {
   retryQueuedFulfillmentOrders,
   syncFulfillmentStatuses,
 } from '../services/fulfillmentProviderService';
+import {
+  SUBMITTED_FOR_VERIFICATION,
+  applyManualVerificationToOrder,
+} from '../services/beneficiaryVerificationService';
 import { isSmartDataHubConfigured, testSmartDataHubConnection } from '../services/smartDataHubClient';
 import { isDatamaxConfigured, testDatamaxConnection, checkDatamaxBalance } from '../services/datamaxClient';
 import { migrateFulfillmentSettings, normalizeNetworkRoute, normalizeAfaRoute } from '../services/settingsService';
@@ -925,7 +929,15 @@ router.get('/orders/:orderId/tracking', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/orders/bulk/status', asyncHandler(async (req: AuthRequest, res) => {
-  const allowed = ['pending', 'processing', 'delivered', 'failed', 'refunded', 'cancelled'];
+  const allowed = [
+    'pending',
+    'processing',
+    'delivered',
+    'failed',
+    'refunded',
+    'cancelled',
+    'verification',
+  ];
   const { orderIds, status } = req.body as { orderIds?: string[]; status?: string };
 
   if (!Array.isArray(orderIds) || orderIds.length === 0) {
@@ -937,20 +949,42 @@ router.patch('/orders/bulk/status', asyncHandler(async (req: AuthRequest, res) =
   if (!status || !allowed.includes(status)) {
     throw new AppError('Invalid order status');
   }
-  const nextStatus = status as OrderStatus;
 
   const uniqueIds = [...new Set(orderIds.map((id) => String(id).trim()).filter(Boolean))];
   const orders = await Order.find({ orderId: { $in: uniqueIds } });
 
   const updatedOrders = [];
   for (const order of orders) {
+    if (status === 'verification') {
+      const verification = await applyManualVerificationToOrder(order);
+      const updated = await applyOrderStatusUpdate(order, {
+        status: 'processing',
+        providerStatus: verification.providerStatus || SUBMITTED_FOR_VERIFICATION,
+        stepLabel: verification.stepLabel,
+        stepMessage: `${verification.stepMessage}${
+          verification.emailSent ? ' Verification email sent.' : ''
+        } (bulk)`,
+      });
+      updatedOrders.push({
+        orderId: updated.orderId,
+        status: updated.status,
+        providerStatus: updated.providerStatus,
+      });
+      continue;
+    }
+
+    const nextStatus = status as OrderStatus;
     const updated = await applyOrderStatusUpdate(order, {
       status: nextStatus,
       providerStatus: nextStatus,
       stepLabel: 'Admin Bulk Update',
       stepMessage: `Status set to ${nextStatus} by admin (bulk)`,
     });
-    updatedOrders.push({ orderId: updated.orderId, status: updated.status });
+    updatedOrders.push({
+      orderId: updated.orderId,
+      status: updated.status,
+      providerStatus: updated.providerStatus,
+    });
   }
 
   res.json({
@@ -964,12 +998,35 @@ router.patch('/orders/bulk/status', asyncHandler(async (req: AuthRequest, res) =
 }));
 
 router.patch('/orders/:orderId/status', asyncHandler(async (req: AuthRequest, res) => {
-  const allowed = ['pending', 'processing', 'delivered', 'failed', 'refunded', 'cancelled'];
+  const allowed = [
+    'pending',
+    'processing',
+    'delivered',
+    'failed',
+    'refunded',
+    'cancelled',
+    'verification',
+  ];
   const { status } = req.body;
   if (!allowed.includes(status)) throw new AppError('Invalid order status');
 
   const order = await Order.findOne({ orderId: req.params.orderId });
   if (!order) throw new AppError('Order not found');
+
+  if (status === 'verification') {
+    const verification = await applyManualVerificationToOrder(order);
+    const updated = await applyOrderStatusUpdate(order, {
+      status: 'processing',
+      providerStatus: verification.providerStatus || SUBMITTED_FOR_VERIFICATION,
+      stepLabel: verification.stepLabel,
+      stepMessage: `${verification.stepMessage}${
+        verification.emailSent ? ' Verification email sent.' : ' No buyer email on order.'
+      }`,
+    });
+    res.json({ success: true, data: updated });
+    return;
+  }
+
   const updated = await applyOrderStatusUpdate(order, {
     status,
     providerStatus: status,

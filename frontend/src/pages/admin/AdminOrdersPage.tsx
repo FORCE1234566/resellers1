@@ -51,7 +51,27 @@ interface OrderRow {
   createdAt: string;
 }
 
-const STATUSES = ['pending', 'processing', 'delivered', 'failed', 'refunded', 'cancelled'];
+const STATUSES = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'verification', label: 'Verification' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'refunded', label: 'Refunded' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+function statusSelectValue(order: OrderRow): string {
+  if (
+    order.providerStatus === 'submitted_for_verification' ||
+    order.providerStatus === 'exported' ||
+    order.providerStatus === 'extracted'
+  ) {
+    return 'verification';
+  }
+  if (order.providerStatus === 'verified') return 'processing';
+  return order.status;
+}
 
 const SOURCE_FILTERS = [
   { value: '', label: 'All sources' },
@@ -141,9 +161,20 @@ export default function AdminOrdersPage() {
     setUpdatingId(orderId);
     setError('');
     try {
-      await api.patch(`/admin/orders/${orderId}/status`, { status });
+      const { data } = await api.patch(`/admin/orders/${orderId}/status`, { status });
+      const updated = data.data as OrderRow;
       setOrders((prev) =>
-        prev.map((o) => (o.orderId === orderId ? { ...o, status } : o))
+        prev.map((o) =>
+          o.orderId === orderId
+            ? {
+                ...o,
+                status: updated.status || (status === 'verification' ? 'processing' : status),
+                providerStatus:
+                  updated.providerStatus ||
+                  (status === 'verification' ? 'submitted_for_verification' : o.providerStatus),
+              }
+            : o
+        )
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update status');
@@ -185,17 +216,27 @@ export default function AdminOrdersPage() {
         status: bulkStatus,
       });
       const updatedMap = new Map(
-        (data.data.orders as Array<{ orderId: string; status: string }>).map((o) => [
-          o.orderId,
-          o.status,
-        ])
+        (
+          data.data.orders as Array<{
+            orderId: string;
+            status: string;
+            providerStatus?: string;
+          }>
+        ).map((o) => [o.orderId, o])
       );
       setOrders((prev) =>
-        prev.map((o) =>
-          updatedMap.has(o.orderId) ? { ...o, status: updatedMap.get(o.orderId)! } : o
-        )
+        prev.map((o) => {
+          const updated = updatedMap.get(o.orderId);
+          if (!updated) return o;
+          return {
+            ...o,
+            status: updated.status,
+            providerStatus: updated.providerStatus || o.providerStatus,
+          };
+        })
       );
       setSelectedIds(new Set());
+      await loadOrders(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bulk update failed');
     } finally {
@@ -257,8 +298,8 @@ export default function AdminOrdersPage() {
               className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 capitalize text-gray-700 bg-white"
             >
               {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </select>
@@ -327,14 +368,14 @@ export default function AdminOrdersPage() {
                         Track
                       </Button>
                       <select
-                        value={order.status}
+                        value={statusSelectValue(order)}
                         disabled={updatingId === order.orderId}
                         onChange={(e) => updateStatus(order.orderId, e.target.value)}
                         className="px-2 py-1.5 rounded-lg text-xs font-medium border border-gray-200 capitalize text-gray-700 bg-white"
                       >
                         {STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            Set: {s}
+                          <option key={s.value} value={s.value}>
+                            Set: {s.label}
                           </option>
                         ))}
                       </select>
@@ -443,14 +484,14 @@ export default function AdminOrdersPage() {
                             {formatOrderStatusLabel(order.status, order.providerStatus)}
                           </span>
                           <select
-                            value={order.status}
+                            value={statusSelectValue(order)}
                             disabled={updatingId === order.orderId}
                             onChange={(e) => updateStatus(order.orderId, e.target.value)}
                             className="px-2 py-1 rounded-lg text-xs font-medium border border-gray-200 capitalize text-gray-700 bg-white"
                           >
                             {STATUSES.map((s) => (
-                              <option key={s} value={s}>
-                                Set: {s}
+                              <option key={s.value} value={s.value}>
+                                Set: {s.label}
                               </option>
                             ))}
                           </select>
