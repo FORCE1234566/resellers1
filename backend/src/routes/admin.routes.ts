@@ -52,6 +52,7 @@ import {
   applyOrderStatusUpdate,
   getOrderTracking,
   retryQueuedFulfillmentOrders,
+  syncInFlightOrders,
   syncFulfillmentStatuses,
 } from '../services/fulfillmentProviderService';
 import {
@@ -880,24 +881,31 @@ router.get('/orders', asyncHandler(async (req, res) => {
   const searchFilter = buildOrderSearchFilter(String(q || ''));
   if (searchFilter) Object.assign(filter, searchFilter);
 
-  // Refresh provider statuses in background — never block the list response.
-  void syncFulfillmentStatuses({}, 40).catch(() => {});
+  const pageNumber = Number(page);
+  const pageSize = Number(limit);
 
   const [orders, total] = await Promise.all([
     Order.find(filter)
       .sort({ createdAt: -1 })
-      .skip((Number(page) - 1) * Number(limit))
-      .limit(Number(limit))
-      .populate('agentId', 'fullName email')
-      .populate('resellerId', 'fullName email resellerStore.storeName')
-      .select(
-        'orderId customerEmail recipientPhone network bundleSize status providerStatus providerReference source sellingPrice profit platformProfit adminBasePrice costPrice totalAmount agentId resellerId createdAt updatedAt'
-      )
-      .lean(),
+      .skip((pageNumber - 1) * pageSize)
+      .limit(pageSize),
     Order.countDocuments(filter),
   ]);
 
-  const data = orders.map((o) => {
+  await syncInFlightOrders(orders);
+
+  const refreshed = await Order.find(filter)
+    .sort({ createdAt: -1 })
+    .skip((pageNumber - 1) * pageSize)
+    .limit(pageSize)
+    .populate('agentId', 'fullName email')
+    .populate('resellerId', 'fullName email resellerStore.storeName')
+    .select(
+      'orderId customerEmail recipientPhone network bundleSize status providerStatus providerReference source sellingPrice profit platformProfit adminBasePrice costPrice totalAmount agentId resellerId createdAt updatedAt'
+    )
+    .lean();
+
+  const data = refreshed.map((o) => {
     const dealer = o.agentId as { _id?: unknown; fullName?: string; email?: string } | null;
     const reseller = o.resellerId as {
       _id?: unknown;
@@ -919,7 +927,7 @@ router.get('/orders', asyncHandler(async (req, res) => {
     };
   });
 
-  res.json({ success: true, data: { orders: data, total, page: Number(page) } });
+  res.json({ success: true, data: { orders: data, total, page: pageNumber } });
 }));
 
 router.get('/orders/:orderId/tracking', asyncHandler(async (req, res) => {
