@@ -193,7 +193,7 @@ export async function markBeneficiaryVerified(
   );
 }
 
-/** Auto-mark numbers submitted ≥ 7 days ago as verified; mirror onto open orders. */
+/** Auto-mark numbers submitted ≥ 7 days ago as verified (phone registry only). */
 export async function autoVerifyAgedBeneficiaries(limit = 100): Promise<number> {
   const cutoff = new Date(Date.now() - BENEFICIARY_VERIFICATION_DAYS * 24 * 60 * 60 * 1000);
   const pending = await BeneficiaryVerification.find({
@@ -204,39 +204,54 @@ export async function autoVerifyAgedBeneficiaries(limit = 100): Promise<number> 
     .limit(limit);
 
   let updated = 0;
-  const { Order } = await import('../models/Order');
-
   for (const record of pending) {
     record.status = 'verified';
     record.verifiedAt = new Date();
     await record.save();
-
-    await Order.updateMany(
-      {
-        recipientPhone: record.phone,
-        network: record.network as 'MTN' | 'Telecel' | 'AirtelTigo',
-        fulfillmentProvider: 'smartdatahub',
-        providerStatus: SUBMITTED_FOR_VERIFICATION,
-        status: { $in: ['pending', 'processing'] },
-      },
-      {
-        $set: { providerStatus: VERIFIED_PROVIDER_STATUS },
-        $push: {
-          statusHistory: {
-            step: 'verified',
-            label: 'Number Verified',
-            message:
-              'Beneficiary number verified. Subsequent orders for this number should process faster.',
-            done: false,
-            at: new Date(),
-          },
-        },
-      }
-    );
     updated++;
   }
 
   return updated;
+}
+
+/** When an order entered submitted-for-verification (for the 1-week auto-deliver clock). */
+export function getVerificationStartedAt(order: IOrder): Date | null {
+  const history = [...(order.statusHistory || [])].reverse();
+  for (const entry of history) {
+    const step = String(entry.step || '').toLowerCase().replace(/\s+/g, '_');
+    const label = String(entry.label || '').toLowerCase();
+    if (
+      step === SUBMITTED_FOR_VERIFICATION ||
+      step === 'exported' ||
+      step === 'extracted' ||
+      label.includes('submitted for verification')
+    ) {
+      return entry.at ? new Date(entry.at) : null;
+    }
+  }
+  return null;
+}
+
+export async function getVerificationCutoffDate(): Promise<Date> {
+  return new Date(Date.now() - BENEFICIARY_VERIFICATION_DAYS * 24 * 60 * 60 * 1000);
+}
+
+export async function resolveVerificationStartDate(order: IOrder): Promise<Date | null> {
+  const fromHistory = getVerificationStartedAt(order);
+  if (fromHistory) return fromHistory;
+
+  const phone = normalizeBeneficiaryPhone(order.recipientPhone);
+  const record = await BeneficiaryVerification.findOne({
+    phone,
+    network: order.network,
+  }).select('submittedAt');
+  if (record?.submittedAt) return new Date(record.submittedAt);
+
+  // Last resort: order update time while already in verification state
+  if (order.providerStatus === SUBMITTED_FOR_VERIFICATION) {
+    return order.updatedAt ? new Date(order.updatedAt) : order.createdAt ? new Date(order.createdAt) : null;
+  }
+  return null;
 }
 
 /**

@@ -45,4 +45,34 @@ test('preserves submitted_for_verification until terminal API status', () => {
     shouldPreserveSubmittedForVerification(SUBMITTED_FOR_VERIFICATION, 'delivered'),
     false
   );
+  assert.equal(
+    shouldPreserveSubmittedForVerification(SUBMITTED_FOR_VERIFICATION, 'exported'),
+    true
+  );
+});
+
+test('getVerificationStartedAt reads history entry', async () => {
+  const { getVerificationStartedAt } = await import(
+    '../services/beneficiaryVerificationService.js'
+  );
+  const started = new Date('2026-07-01T00:00:00.000Z');
+  const at = getVerificationStartedAt({
+    statusHistory: [
+      {
+        step: 'processing',
+        label: 'Processing',
+        message: 'x',
+        done: false,
+        at: new Date('2026-06-30T00:00:00.000Z'),
+      },
+      {
+        step: 'submitted_for_verification',
+        label: 'Submitted for Verification',
+        message: 'x',
+        done: false,
+        at: started,
+      },
+    ],
+  } as never);
+  assert.equal(at?.toISOString(), started.toISOString());
 });

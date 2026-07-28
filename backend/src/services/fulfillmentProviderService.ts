@@ -30,6 +30,9 @@ import {
   isBeneficiaryVerificationTriggerStatus,
   markBeneficiaryVerified,
   shouldPreserveSubmittedForVerification,
+  resolveVerificationStartDate,
+  getVerificationCutoffDate,
+  autoVerifyAgedBeneficiaries,
 } from './beneficiaryVerificationService';
 
 export interface StatusHistoryEntry {
@@ -712,14 +715,54 @@ export async function syncFulfillmentStatuses(scope: FulfillmentScope = {}, limi
   for (const order of orders) {
     await syncOrderFromProvider(order);
   }
+
+  // Also promote aged verification orders so dashboards stay current without waiting for cron.
+  void autoDeliverAgedVerificationOrders(Math.min(limit, 40)).catch((err) => {
+    console.error(
+      '[autoDeliverAgedVerificationOrders]',
+      err instanceof Error ? err.message : err
+    );
+  });
 }
 
-/** Background job: sync in-flight orders from APIs and auto-verify aged MTN numbers. */
+/**
+ * After exactly 1 week in "submitted for verification", mark the order delivered
+ * (mirrors the end of the MTN verification window when the API has not already delivered).
+ */
+export async function autoDeliverAgedVerificationOrders(limit = 100): Promise<number> {
+  const cutoff = await getVerificationCutoffDate();
+  const orders = await Order.find({
+    providerStatus: SUBMITTED_FOR_VERIFICATION,
+    status: { $in: ['pending', 'processing'] },
+  })
+    .sort({ updatedAt: 1 })
+    .limit(limit);
+
+  let delivered = 0;
+  for (const order of orders) {
+    const startedAt = await resolveVerificationStartDate(order);
+    if (!startedAt || startedAt > cutoff) continue;
+
+    await applyOrderStatusUpdate(order, {
+      status: 'delivered',
+      providerStatus: 'delivered',
+      stepLabel: 'Delivered',
+      stepMessage:
+        'Automatically marked delivered after the 1-week MTN verification period.',
+    });
+    await markBeneficiaryVerified(order.recipientPhone, order.network, order.orderId);
+    delivered++;
+  }
+
+  await autoVerifyAgedBeneficiaries(limit);
+  return delivered;
+}
+
+/** Background job: mirror Smart Data Hub/Datamax statuses and auto-deliver aged verifications. */
 export async function runFulfillmentBackgroundSync(limit = 80): Promise<{
   synced: number;
-  verified: number;
+  autoDelivered: number;
 }> {
-  const { autoVerifyAgedBeneficiaries } = await import('./beneficiaryVerificationService');
   await retryQueuedFulfillmentOrders(Math.min(limit, 40));
 
   const orders = await Order.find({
@@ -741,8 +784,8 @@ export async function runFulfillmentBackgroundSync(limit = 80): Promise<{
     }
   }
 
-  const verified = await autoVerifyAgedBeneficiaries(100);
-  return { synced, verified };
+  const autoDelivered = await autoDeliverAgedVerificationOrders(100);
+  return { synced, autoDelivered };
 }
 
 export async function getFulfillmentStatusCounts(scope: FulfillmentScope = {}) {
@@ -769,6 +812,8 @@ export async function syncInFlightOrders(orders: IOrder[]) {
   for (const order of inFlight) {
     await syncOrderFromProvider(order);
   }
+
+  void autoDeliverAgedVerificationOrders(20).catch(() => {});
 }
 
 export function verifyFulfillmentWebhookSignature(payload: string, signature: string): boolean {
