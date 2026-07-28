@@ -6,7 +6,7 @@ import { User } from '../models/User';
 import { AppError } from '../middleware/errorHandler';
 import { generateOrderId, generateOrderNumber, isValidGhanaPhone, roundMoney } from '../utils/helpers';
 import { toOrderCreationError } from '../utils/mongoErrors';
-import { debitWallet } from './walletService';
+import { debitWallet, creditWallet } from './walletService';
 import { applyOrderStatusUpdate, submitOrderToProvider } from './fulfillmentProviderService';
 import { snapshotPlatformProfitForOrder } from './platformProfitService';
 import { getAdminBasePrice, computeResellerOrderProfit } from './profitFormulas';
@@ -385,12 +385,41 @@ export const createOrder = async (input: CreateOrderInput) => {
       await deliverCheckerNotifications(order, checker);
     } catch (err) {
       console.error('Checker fulfillment failed:', err);
-      await applyOrderStatusUpdate(order, {
-        status: 'failed',
-        providerStatus: 'failed',
-        stepLabel: 'Checker Unavailable',
-        stepMessage: err instanceof AppError ? err.message : 'Could not assign checker',
-      });
+      if (needsWalletDebit && input.agentId) {
+        try {
+          await creditWallet(
+            input.agentId,
+            sellingPrice,
+            'refund',
+            `Refund for failed checker order ${order.orderId}`,
+            `${order.orderId}-checker-refund`
+          );
+          await applyOrderStatusUpdate(order, {
+            status: 'refunded',
+            providerStatus: 'refunded',
+            stepLabel: 'Checker Refunded',
+            stepMessage:
+              err instanceof AppError
+                ? `${err.message} Wallet refunded.`
+                : 'Could not assign checker — wallet refunded.',
+          });
+        } catch (refundErr) {
+          console.error('Checker refund failed:', refundErr);
+          await applyOrderStatusUpdate(order, {
+            status: 'failed',
+            providerStatus: 'failed',
+            stepLabel: 'Checker Unavailable',
+            stepMessage: err instanceof AppError ? err.message : 'Could not assign checker',
+          });
+        }
+      } else {
+        await applyOrderStatusUpdate(order, {
+          status: 'failed',
+          providerStatus: 'failed',
+          stepLabel: 'Checker Unavailable',
+          stepMessage: err instanceof AppError ? err.message : 'Could not assign checker',
+        });
+      }
       throw err;
     }
   } else if (env.fulfillment.enabled || env.datamax.enabled) {

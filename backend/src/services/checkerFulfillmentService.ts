@@ -15,6 +15,15 @@ import { sessionOpts, withMongoTransaction } from '../utils/mongoTransaction';
 export async function assignCheckerToOrder(
   order: IOrder
 ): Promise<{ serial: string; pin: string; type: 'bece' | 'wassce' }> {
+  // Idempotent: never assign a second unused pin to the same order.
+  if (order.checkerDetails?.serial && order.checkerDetails?.pin && order.checkerDetails?.type) {
+    return {
+      type: order.checkerDetails.type,
+      serial: order.checkerDetails.serial,
+      pin: order.checkerDetails.pin,
+    };
+  }
+
   const type = checkerTypeFromBundle(order.bundleSize);
   if (!type) {
     throw new AppError('Invalid checker order type');
@@ -23,8 +32,13 @@ export async function assignCheckerToOrder(
   await assertCheckerInStock(type);
 
   const assigned = await withMongoTransaction(async (session) => {
+    // Only unused (available) inventory can be sold — assigned/used pins are never selected.
     const checker = await ResultChecker.findOneAndUpdate(
-      { type, status: 'available' },
+      {
+        type,
+        status: 'available',
+        $or: [{ orderId: { $exists: false } }, { orderId: null }],
+      },
       {
         $set: {
           status: 'assigned',

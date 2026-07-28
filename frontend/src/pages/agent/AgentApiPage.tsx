@@ -230,7 +230,7 @@ export default function AgentApiPage() {
         <div className="mb-8">
           <h1 className="text-xl sm:text-2xl font-bold text-white mb-1">Developer API</h1>
           <p className="text-sm text-gray-400">
-            Request access to integrate automated data purchases into your application.
+            Request access to integrate data, AFA, and results checker purchases into your website.
           </p>
         </div>
 
@@ -288,7 +288,8 @@ export default function AgentApiPage() {
       <div className="mb-8">
         <h1 className="text-xl sm:text-2xl font-bold text-white mb-1">Developer API</h1>
         <p className="text-sm text-gray-400">
-          Integrate data purchases into your app using your Agent wallet balance.
+          Connect your website to buy data, MTN AFA registration, and BECE/WASSCE results checkers
+          using your Agent wallet balance.
         </p>
       </div>
 
@@ -517,11 +518,16 @@ Headers:
             />
 
             <h4 className="text-sm font-semibold text-gray-800 pt-2">Results Checker (BECE / WASSCE)</h4>
+            <p className="text-xs text-gray-500">
+              Use these endpoints on your website so customers can choose BECE or WASSCE, pay you
+              (or use your wallet), and receive an unused Serial + PIN instantly by API response,
+              email, and SMS. Only unused checkers are sold — assigned pins are never reused.
+            </p>
 
             <EndpointDoc
               method="GET"
               path="/checker"
-              description="Lists BECE and WASSCE result checker offers with agent fees, stock status, and available pin count."
+              description="Lists BECE and WASSCE result checker offers with agent fees, stock status, and available pin count. Call this to show customers which exam type is available."
               response={`{
   "success": true,
   "data": {
@@ -551,9 +557,9 @@ Headers:
             <EndpointDoc
               method="POST"
               path="/checker/purchase"
-              description="Purchase a BECE or WASSCE results checker pin. Wallet is debited immediately. Serial and PIN are returned when status is delivered (usually instant)."
+              description="Purchase one unused BECE or WASSCE checker for a customer. Set type to bece or wassce. Wallet is debited immediately. Serial and PIN are returned instantly (status delivered) and also emailed/SMS to the customer. Used checkers are never reassigned."
               request={`{
-  "type": "bece",
+  "type": "wassce",
   "email": "customer@example.com",
   "phone": "0241234567"
 }`}
@@ -563,10 +569,10 @@ Headers:
   "data": {
     "orderId": "ORD-M1ABC2-XY9Z",
     "status": "delivered",
-    "type": "bece",
-    "bundleSize": "BECE",
-    "serial": "ABC1234567",
-    "pin": "987654",
+    "type": "wassce",
+    "bundleSize": "WASSCE",
+    "serial": "WGC240640047",
+    "pin": "319125067594",
     "message": "Checker delivered successfully."
   }
 }`}
@@ -593,17 +599,24 @@ Headers:
             <EndpointDoc
               method="GET"
               path="/orders/:orderId"
-              description="Check the status of an order you created. Only returns orders belonging to your Agent account."
+              description="Check the status of an order you created. Only returns orders belonging to your Agent account. For results checkers, checkerDetails includes serial and pin when delivered."
               response={`{
   "success": true,
   "data": {
     "orderId": "ORD-M1ABC2-XY9Z",
     "network": "MTN",
-    "bundleSize": "1GB",
+    "productType": "checker",
+    "bundleSize": "WASSCE",
     "recipientPhone": "0241234567",
-    "sellingPrice": 4.73,
+    "customerEmail": "customer@example.com",
+    "sellingPrice": 18.00,
     "status": "delivered",
-    "source": "Agent_api",
+    "source": "agent_api",
+    "checkerDetails": {
+      "type": "wassce",
+      "serial": "WGC240640047",
+      "pin": "319125067594"
+    },
     "createdAt": "2026-06-08T12:00:00.000Z",
     "updatedAt": "2026-06-08T12:00:05.000Z"
   }

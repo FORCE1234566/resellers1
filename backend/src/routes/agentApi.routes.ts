@@ -223,7 +223,25 @@ router.get('/orders/:orderId', asyncHandler(async (req: AgentApiRequest, res) =>
     agentId: req.user!._id,
   });
   if (!order) throw new AppError('Order not found', 404);
-  res.json({ success: true, data: order });
+  res.json({
+    success: true,
+    data: {
+      orderId: order.orderId,
+      network: order.network,
+      productType: order.productType,
+      bundleSize: order.bundleSize,
+      recipientPhone: order.recipientPhone,
+      customerEmail: order.customerEmail,
+      sellingPrice: order.sellingPrice,
+      totalAmount: order.totalAmount,
+      status: order.status,
+      source: order.source,
+      checkerDetails: order.checkerDetails || undefined,
+      afaDetails: order.afaDetails || undefined,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    },
+  });
 }));
 
 export default router;
