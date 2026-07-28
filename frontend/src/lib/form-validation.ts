@@ -1,3 +1,5 @@
+import { validateNetworkPhone } from './network-phone';
+
 type Validator = (value: string) => string | null;
 
 export const v = {
@@ -15,6 +17,13 @@ export const v = {
     if (!value.trim()) return null;
     return /^0\d{9}$/.test(value) ? null : 'Phone must be 10 digits starting with 0';
   },
+
+  networkPhone:
+    (network: string): Validator =>
+    (value) => {
+      if (!value.trim()) return null;
+      return validateNetworkPhone(value, network);
+    },
 
   match:
     (other: string, label: string): Validator =>

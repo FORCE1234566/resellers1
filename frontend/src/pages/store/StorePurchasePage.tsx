@@ -13,6 +13,7 @@ import { redirectToPaystack } from '@/lib/paystack';
 import { buildStoreHomePath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
 import StorePromoCodeInput, { PromoPreview } from '@/components/store/StorePromoCodeInput';
 import { sortPackagesByBundleSize } from '@/lib/bundle-size';
+import { networkPhoneHint, networkPhonePlaceholder, validateNetworkPhone } from '@/lib/network-phone';
 
 export default function StorePurchasePage() {
   const params = useParams();
@@ -58,7 +59,7 @@ export default function StorePurchasePage() {
       { packageId, phone, email },
       {
         packageId: [v.required('Bundle')],
-        phone: [v.required('Recipient number'), v.phone],
+        phone: [v.required('Recipient number'), v.networkPhone(network)],
         email: [v.required('Email'), v.email],
       }
     );
@@ -85,6 +86,10 @@ export default function StorePurchasePage() {
     const digits = value.replace(/\D/g, '').slice(0, 10);
     setPhone(digits);
     if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
+    if (digits.length === 10) {
+      const networkError = validateNetworkPhone(digits, network);
+      if (networkError) setFieldErrors((prev) => ({ ...prev, phone: networkError }));
+    }
   };
 
   if (!slug) {
@@ -142,9 +147,12 @@ export default function StorePurchasePage() {
               label="Recipient phone number"
               value={phone}
               onChange={(e) => handlePhoneChange(e.target.value)}
-              placeholder="0XXXXXXXXX"
+              placeholder={networkPhonePlaceholder(network)}
               error={fieldErrors.phone}
             />
+            <p className="text-xs text-gray-500 -mt-2">
+              Only {network} numbers ({networkPhoneHint(network)})
+            </p>
 
             <Input
               label="Your email (for receipt)"

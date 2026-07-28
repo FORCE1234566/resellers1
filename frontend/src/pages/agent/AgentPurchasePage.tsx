@@ -9,6 +9,11 @@ import Select from '@/components/ui/Select';
 import NetworkStockBar, { NetworkStockRow } from '@/components/network/NetworkStockBar';
 import { formatCurrency } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import {
+  networkPhoneHint,
+  networkPhonePlaceholder,
+  validateNetworkPhone,
+} from '@/lib/network-phone';
 
 interface AgentPackage {
   _id: string;
@@ -54,6 +59,17 @@ export default function AgentPurchasePage() {
   const handlePurchase = async () => {
     setSubmitting(true);
     setMsg('');
+    const phoneError = validateNetworkPhone(phone, network);
+    if (!network) {
+      setMsg('Select a network first');
+      setSubmitting(false);
+      return;
+    }
+    if (phoneError) {
+      setMsg(phoneError);
+      setSubmitting(false);
+      return;
+    }
     try {
       const res = await api.post('/agent/purchase', { packageId, recipientPhone: phone });
       setMsg(`Order ${res.data.data.orderId} created successfully!`);
@@ -81,7 +97,12 @@ export default function AgentPurchasePage() {
           <Select
             label="Select Network"
             value={network}
-            onChange={(e) => { setNetwork(e.target.value); setPackageId(''); }}
+            onChange={(e) => {
+              setNetwork(e.target.value);
+              setPackageId('');
+              setPhone('');
+              setMsg('');
+            }}
             options={[
               { value: '', label: 'Choose network...' },
               ...networkStock.map((n) => ({
@@ -108,7 +129,17 @@ export default function AgentPurchasePage() {
               <p className="text-sm text-gray-600">Price: <strong>{formatCurrency(selected.agentPrice)}</strong></p>
             </div>
           )}
-          <Input label="Recipient Number" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0XXXXXXXXX" />
+          <Input
+            label="Recipient Number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            placeholder={network ? networkPhonePlaceholder(network) : '0XXXXXXXXX'}
+          />
+          {network && (
+            <p className="text-xs text-gray-500 -mt-2">
+              Only {network} numbers ({networkPhoneHint(network)})
+            </p>
+          )}
           {msg && <p className={`text-sm p-3 rounded-lg ${msg.includes('success') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{msg}</p>}
           <Button onClick={handlePurchase} loading={submitting} disabled={!packageId || !phone} className="w-full">
             Confirm Purchase

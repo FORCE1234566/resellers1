@@ -29,7 +29,7 @@ import {
 import { env } from '../config/env';
 import { withMongoTransaction, sessionOpts } from '../utils/mongoTransaction';
 import { appendAuditLog } from './immutableAuditService';
-import { normalizeGhanaPhone } from '../utils/phone';
+import { normalizeGhanaPhone, assertNetworkPhone } from '../utils/phone';
 import { redeemPromoCode } from './promoCodeService';
 
 const getSettings = async () => {
@@ -212,10 +212,7 @@ export const createOrder = async (input: CreateOrderInput) => {
     if (!input.recipientPhone) {
       throw new AppError('Recipient phone is required');
     }
-    recipientPhone = normalizeGhanaPhone(input.recipientPhone);
-    if (!isValidGhanaPhone(recipientPhone)) {
-      throw new AppError('Recipient number must be 10 digits starting with 0');
-    }
+    recipientPhone = assertNetworkPhone(input.recipientPhone, pkg.network);
     await assertNetworkInStock(pkg.network);
   }
 
@@ -442,9 +439,13 @@ export const validateBulkOrders = async (
   let totalCost = 0;
 
   for (const line of lines) {
-    const phone = normalizeGhanaPhone(line.phone);
-    if (!isValidGhanaPhone(phone)) {
-      throw new AppError(`Invalid phone number: ${line.phone}`);
+    let phone: string;
+    try {
+      phone = assertNetworkPhone(line.phone, network);
+    } catch {
+      throw new AppError(
+        `Invalid ${network} number: ${line.phone}. Use a number that starts with the correct ${network} prefix.`
+      );
     }
     if (seenPhones.has(phone)) {
       throw new AppError(`Duplicate phone number: ${phone}`);

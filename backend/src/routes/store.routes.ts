@@ -8,6 +8,7 @@ import { Order } from '../models/Order';
 import { getSettings } from '../services/settingsService';
 import { initializePayment } from '../utils/paystack';
 import { isValidGhanaPhone, roundMoney } from '../utils/helpers';
+import { assertNetworkPhone } from '../utils/phone';
 import { assertNetworkInStock } from '../services/networkStockService';
 import { assertAfaInStock, getAfaStock } from '../services/afaStockService';
 import { getAfaPackage } from '../services/afaPackageService';
@@ -485,9 +486,7 @@ router.post('/:slug/purchase/init', purchaseLimiter, blockStorePricing, asyncHan
     phone = afaDetails.phone;
   } else {
     if (!recipientPhone) throw new AppError('Recipient phone is required');
-    if (!isValidGhanaPhone(recipientPhone)) {
-      throw new AppError('Recipient number must be 10 digits');
-    }
+    phone = assertNetworkPhone(recipientPhone, pkg.network);
     await assertNetworkInStock(pkg.network);
   }
 
