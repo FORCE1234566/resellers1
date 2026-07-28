@@ -8,7 +8,6 @@ import SiteNavbar from '@/components/layout/SiteNavbar';
 import { BrandMark } from '@/components/ui/BrandLogo';
 import { PLATFORM_FOOTER, PLATFORM_NAME } from '@/lib/brand';
 import ContactHelpButton from '@/components/ui/ContactHelpButton';
-import ResultsCheckerPromo from '@/components/ui/ResultsCheckerPromo';
 import WhatsAppFloat from '@/components/ui/WhatsAppFloat';
 import { ADMIN_SUPPORT_DISPLAY, ADMIN_SUPPORT_PHONE } from '@/lib/support-contact';
 import { api } from '@/lib/api';
@@ -64,27 +63,24 @@ export default function HomePage() {
                 ))}
               </ul>
 
-              <div className="flex flex-col gap-3 sm:gap-4">
-                <div className="flex flex-wrap gap-2 sm:gap-4">
-                  <Link to="/register">
-                    <Button
-                      size="sm"
-                      className="px-4 py-2 rounded-md sm:px-7 sm:py-3 sm:text-base sm:rounded-lg shadow-sm sm:shadow-md"
-                    >
-                      Become A Reseller
-                    </Button>
-                  </Link>
-                  <Link to="/login/agent">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="px-4 py-2 rounded-md border sm:px-7 sm:py-3 sm:text-base sm:rounded-lg sm:border-2"
-                    >
-                      Agent Login
-                    </Button>
-                  </Link>
-                  <ResultsCheckerPromo />
-                </div>
+              <div className="flex flex-wrap gap-2 sm:gap-4">
+                <Link to="/register">
+                  <Button
+                    size="sm"
+                    className="px-4 py-2 rounded-md sm:px-7 sm:py-3 sm:text-base sm:rounded-lg shadow-sm sm:shadow-md"
+                  >
+                    Become A Reseller
+                  </Button>
+                </Link>
+                <Link to="/login/agent">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="px-4 py-2 rounded-md border sm:px-7 sm:py-3 sm:text-base sm:rounded-lg sm:border-2"
+                  >
+                    Agent Login
+                  </Button>
+                </Link>
               </div>
             </div>
 
