@@ -21,11 +21,22 @@ const VERIFICATION_TRIGGER_STATUSES = new Set([
   'unverified',
 ]);
 
-/** Email is sent only when Smart Data Hub reports the number as exported. */
+/**
+ * Email should be sent as soon as Smart Data Hub shows the number has entered
+ * the verification-submission flow, whether that comes back as exported,
+ * extracted, or submitted_for_verification.
+ */
 export function isExportedStatus(raw?: string | null): boolean {
   if (!raw?.trim()) return false;
   const normalized = raw.toLowerCase().replace(/\s+/g, '_');
-  return normalized === 'exported' || normalized === 'extracted';
+  return (
+    normalized === 'exported' ||
+    normalized === 'extracted' ||
+    normalized === 'submitted_for_verification' ||
+    normalized === 'awaiting_verification' ||
+    normalized === 'verification_pending' ||
+    normalized === 'unverified'
+  );
 }
 
 export function normalizeBeneficiaryPhone(phone: string): string {

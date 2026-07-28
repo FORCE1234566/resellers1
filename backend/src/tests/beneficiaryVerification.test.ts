@@ -28,12 +28,16 @@ test('verification trigger statuses are detected', () => {
   assert.equal(isBeneficiaryVerificationTriggerStatus('delivered'), false);
 });
 
-test('exported status is the email trigger', () => {
+test('verification submission statuses trigger the email', () => {
   assert.equal(isExportedStatus('exported'), true);
   assert.equal(isExportedStatus('EXPORTED'), true);
   assert.equal(isExportedStatus('extracted'), true);
+  assert.equal(isExportedStatus('submitted_for_verification'), true);
+  assert.equal(isExportedStatus('awaiting_verification'), true);
+  assert.equal(isExportedStatus('verification_pending'), true);
+  assert.equal(isExportedStatus('unverified'), true);
   assert.equal(isExportedStatus('processing'), false);
-  assert.equal(isExportedStatus('submitted_for_verification'), false);
+  assert.equal(isExportedStatus('delivered'), false);
 });
 
 test('preserves submitted_for_verification until terminal API status', () => {
