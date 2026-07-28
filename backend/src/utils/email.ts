@@ -311,9 +311,16 @@ export const sendCheckerDeliveryEmail = async (
 };
 
 export const sendMtnNumberVerificationEmail = async (
-  email: string,
+  emails: string | string[],
   input: { phone: string; orderId: string }
 ): Promise<void> => {
+  const recipients = [...new Set(
+    (Array.isArray(emails) ? emails : [emails])
+      .map((e) => String(e || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
+  if (recipients.length === 0) return;
+
   const subject = `MTN number verification in progress — ${PLATFORM_NAME}`;
   const text = [
     `${PLATFORM_NAME} — MTN number verification`,
@@ -358,5 +365,7 @@ export const sendMtnNumberVerificationEmail = async (
     </div>
   `;
 
-  await dispatchPriorityEmail({ to: email, subject, text, html });
+  for (const to of recipients) {
+    await dispatchPriorityEmail({ to, subject, text, html });
+  }
 };

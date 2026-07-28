@@ -1,4 +1,5 @@
 import { IOrder } from '../models/Order';
+import { User } from '../models/User';
 import {
   BeneficiaryVerification,
   BeneficiaryVerificationStatus,
@@ -72,22 +73,40 @@ export async function isBeneficiaryVerified(
   return record?.status === 'verified';
 }
 
+export async function resolveStoreOwnerEmail(order: IOrder): Promise<string | undefined> {
+  if (!order.resellerId) return undefined;
+  const reseller = await User.findById(order.resellerId)
+    .select('email resellerStore.supportEmail')
+    .lean();
+  if (!reseller) return undefined;
+  const accountEmail = String(reseller.email || '').trim().toLowerCase();
+  const supportEmail = String(reseller.resellerStore?.supportEmail || '').trim().toLowerCase();
+  return accountEmail || supportEmail || undefined;
+}
+
 export async function markBeneficiarySubmittedForVerification(input: {
   phone: string;
   network: string;
   orderId: string;
   customerEmail?: string;
+  storeOwnerEmail?: string;
   sendEmail?: boolean;
   /** Admin manual update — send even if an email was already sent for this number. */
   forceEmail?: boolean;
 }): Promise<{ status: BeneficiaryVerificationStatus; emailSent: boolean }> {
   const phone = normalizeBeneficiaryPhone(input.phone);
+  const notifyEmails = [...new Set(
+    [input.customerEmail, input.storeOwnerEmail]
+      .map((e) => String(e || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
+
   const existing = await BeneficiaryVerification.findOne({ phone, network: input.network });
   if (existing?.status === 'verified') {
     let emailSent = false;
-    if (input.forceEmail && input.sendEmail !== false && input.customerEmail?.trim()) {
+    if (input.forceEmail && input.sendEmail !== false && notifyEmails.length > 0) {
       try {
-        await sendMtnNumberVerificationEmail(input.customerEmail.trim().toLowerCase(), {
+        await sendMtnNumberVerificationEmail(notifyEmails, {
           phone,
           orderId: input.orderId,
         });
@@ -98,7 +117,7 @@ export async function markBeneficiarySubmittedForVerification(input: {
       } catch (err) {
         console.error(
           '[MTN verification email failed]',
-          input.customerEmail,
+          notifyEmails.join(', '),
           err instanceof Error ? err.message : err
         );
       }
@@ -125,12 +144,12 @@ export async function markBeneficiarySubmittedForVerification(input: {
   let emailSent = false;
   const shouldEmail =
     input.sendEmail !== false &&
-    Boolean(input.customerEmail?.trim()) &&
+    notifyEmails.length > 0 &&
     (input.forceEmail === true || !record.verificationEmailSentAt);
 
-  if (shouldEmail && input.customerEmail) {
+  if (shouldEmail) {
     try {
-      await sendMtnNumberVerificationEmail(input.customerEmail.trim().toLowerCase(), {
+      await sendMtnNumberVerificationEmail(notifyEmails, {
         phone,
         orderId: input.orderId,
       });
@@ -139,7 +158,7 @@ export async function markBeneficiarySubmittedForVerification(input: {
     } catch (err) {
       console.error(
         '[MTN verification email failed]',
-        input.customerEmail,
+        notifyEmails.join(', '),
         err instanceof Error ? err.message : err
       );
     }
@@ -255,6 +274,7 @@ export async function applySmartDataHubVerificationOnExported(order: IOrder): Pr
     network: order.network,
     orderId: order.orderId,
     customerEmail: order.customerEmail,
+    storeOwnerEmail: await resolveStoreOwnerEmail(order),
     sendEmail: true,
   });
 
@@ -279,6 +299,7 @@ export async function applyManualVerificationToOrder(order: IOrder): Promise<{
     network: order.network,
     orderId: order.orderId,
     customerEmail: order.customerEmail,
+    storeOwnerEmail: await resolveStoreOwnerEmail(order),
     sendEmail: true,
     forceEmail: true,
   });
@@ -287,7 +308,7 @@ export async function applyManualVerificationToOrder(order: IOrder): Promise<{
     providerStatus: SUBMITTED_FOR_VERIFICATION,
     stepLabel: 'Submitted for Verification',
     stepMessage:
-      'Admin marked this number for MTN verification (24–144 hours). The buyer has been notified by email when available.',
+      'Admin marked this number for MTN verification (24–144 hours). The buyer and store owner have been notified by email when available.',
     emailSent: result.emailSent,
   };
 }
