@@ -7,47 +7,67 @@ export type CheckerSmsPayload = {
   pin: string;
 };
 
+const ARKESEL_SEND_URL = 'https://sms.arkesel.com/api/v2/sms/send';
+
 function buildCheckerMessage(payload: CheckerSmsPayload): string {
   return `Your ${payload.type} WAEC checker — Serial: ${payload.serial}, PIN: ${payload.pin}. Use at the WAEC results portal. — ${env.platformName}`;
 }
 
+/** Ghana local 0XXXXXXXXX → E.164-style 233XXXXXXXXX (no leading +). */
+function toArkeselRecipient(to: string): string {
+  const local = normalizeGhanaPhone(to);
+  return local.replace(/^0/, '233');
+}
+
 /**
- * Generic SMS adapter — configure via SMS_API_URL, SMS_API_KEY, SMS_SENDER_ID.
- * Supports common JSON POST shape: { to, message, sender } or Hubtel-style fields.
+ * Send SMS via Arkesel (https://sms.arkesel.com/api/v2/sms/send).
+ * Configure with SMS_API_KEY and SMS_SENDER_ID (default TDGH).
+ * Optional SMS_API_URL overrides the Arkesel endpoint.
  */
 export async function sendSms(to: string, message: string): Promise<void> {
-  const apiUrl = process.env.SMS_API_URL?.trim();
   const apiKey = process.env.SMS_API_KEY?.trim();
-  const senderId = process.env.SMS_SENDER_ID?.trim() || env.platformName.slice(0, 11);
+  const senderId = process.env.SMS_SENDER_ID?.trim() || 'TDGH';
+  const apiUrl = process.env.SMS_API_URL?.trim() || ARKESEL_SEND_URL;
 
-  if (!apiUrl || !apiKey) {
-    console.log(`[SMS Dev] To: ${to} | ${message}`);
+  if (!apiKey) {
+    console.log(`[SMS Dev] To: ${to} | Sender: ${senderId} | ${message}`);
     return;
   }
 
-  const phone = normalizeGhanaPhone(to).replace(/^0/, '233');
+  const recipient = toArkeselRecipient(to);
 
   const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'X-API-KEY': apiKey,
+      'api-key': apiKey,
     },
     body: JSON.stringify({
-      to: phone,
-      recipient: phone,
-      destination: phone,
-      message,
       sender: senderId,
-      sender_id: senderId,
-      from: senderId,
+      message,
+      recipients: [recipient],
     }),
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`SMS API ${res.status}: ${body.slice(0, 200)}`);
+  const bodyText = await res.text();
+  type ArkeselResponse = { status?: string; message?: string; code?: string | number };
+  let parsed: ArkeselResponse | null = null;
+  try {
+    parsed = JSON.parse(bodyText) as ArkeselResponse;
+  } catch {
+    parsed = null;
+  }
+
+  const okHttp = res.ok;
+  const okBody =
+    !parsed ||
+    String(parsed.status || '').toLowerCase() === 'success' ||
+    String(parsed.code || '') === 'ok';
+
+  if (!okHttp || !okBody) {
+    throw new Error(
+      `Arkesel SMS ${res.status}: ${(parsed?.message || bodyText).slice(0, 200)}`
+    );
   }
 }
 
