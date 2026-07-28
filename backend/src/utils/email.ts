@@ -327,7 +327,10 @@ export const sendMtnNumberVerificationEmail = async (
     '',
     'During this verification period, kindly have patience — your money is safe and your order is already processed in the system.',
     '',
-    'Thank you for your patience.',
+    'Thank you.',
+    '',
+    'Best regards,',
+    `${PLATFORM_NAME} Team`,
   ].join('\n');
 
   const html = `
@@ -338,14 +341,20 @@ export const sendMtnNumberVerificationEmail = async (
         submitted to MTN for verification.
       </p>
       <p style="color:#374151;margin:0 0 12px;">
-        Verification will take <strong>24–144 hours</strong>. After verification, subsequent orders
-        for this number will come fast.
+        Verification will take
+        <strong style="color:#dc2626;font-weight:700;">24–144 hours</strong>.
+        After verification, subsequent orders for this number will come fast.
       </p>
       <p style="color:#374151;margin:0 0 12px;">
         During this verification period, kindly have patience — your money is safe and your order is
         already processed in the system.
       </p>
-      <p style="color:#6b7280;font-size:13px;margin:0;">Order reference: <strong>${input.orderId}</strong></p>
+      <p style="color:#6b7280;font-size:13px;margin:0 0 16px;">Order reference: <strong>${input.orderId}</strong></p>
+      <p style="color:#374151;margin:0 0 4px;">Thank you.</p>
+      <p style="color:#374151;margin:0;">
+        Best regards,<br />
+        <strong>${PLATFORM_NAME} Team</strong>
+      </p>
     </div>
   `;
 
