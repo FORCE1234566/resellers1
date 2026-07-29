@@ -37,6 +37,21 @@ export const SMART_DATA_HUB_MTN_COSTS: Record<string, number> = {
   '50GB': 192.5,
 };
 
+/** Smart Data Hub Telecel (Vodafone) API cost prices — GHS */
+export const SMART_DATA_HUB_TELECEL_COSTS: Record<string, number> = {
+  '10GB': 38.0,
+  '15GB': 56.0,
+  '20GB': 76.0,
+  '25GB': 96.0,
+  '30GB': 112.0,
+  '35GB': 134.0,
+  '40GB': 151.0,
+  '45GB': 173.0,
+  '50GB': 193.0,
+  '100GB': 355.0,
+  '150GB': 535.0,
+};
+
 export function normalizeBundleSizeKey(bundleSize: string): string {
   const trimmed = bundleSize.trim().toUpperCase();
   const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*GB$/);
@@ -54,6 +69,11 @@ export function getSmartDataHubMtnCost(bundleSize: string): number | null {
   return SMART_DATA_HUB_MTN_COSTS[key] ?? null;
 }
 
+export function getSmartDataHubTelecelCost(bundleSize: string): number | null {
+  const key = normalizeBundleSizeKey(bundleSize);
+  return SMART_DATA_HUB_TELECEL_COSTS[key] ?? null;
+}
+
 export function resolveOrderApiCost(input: {
   network: Network;
   bundleSize: string;
@@ -67,13 +87,16 @@ export function resolveOrderApiCost(input: {
   if (input.isAfa) {
     return input.costPrice;
   }
-  if (input.network === 'MTN') {
-    if (input.fulfillmentProvider === 'smartdatahub') {
+  if (input.fulfillmentProvider === 'smartdatahub') {
+    if (input.network === 'MTN') {
       return getSmartDataHubMtnCost(input.bundleSize) ?? input.costPrice;
     }
-    if (input.fulfillmentProvider === 'datamax') {
-      return getDatamaxMtnExpressCost(input.bundleSize) ?? input.costPrice;
+    if (input.network === 'Telecel') {
+      return getSmartDataHubTelecelCost(input.bundleSize) ?? input.costPrice;
     }
+  }
+  if (input.fulfillmentProvider === 'datamax' && input.network === 'MTN') {
+    return getDatamaxMtnExpressCost(input.bundleSize) ?? input.costPrice;
   }
   return input.costPrice;
 }
