@@ -21,25 +21,69 @@ import {
   ensurePackageIndexes,
 } from './packageMigrationService';
 import { safeStartupStep } from './startupService';
+import {
+  getSmartDataHubMtnCost,
+  getSmartDataHubTelecelCost,
+  getSmartDataHubAirtelTigoCost,
+} from '../config/datamaxPrices';
 
 const networks = ['MTN', 'Telecel', 'AirtelTigo'] as const;
-const bundles = ['1GB', '2GB', '3GB', '4GB', '5GB', '6GB', '8GB', '10GB', '15GB', '20GB', '25GB', '30GB', '40GB', '50GB'];
+const bundles = [
+  '1GB',
+  '2GB',
+  '3GB',
+  '4GB',
+  '5GB',
+  '6GB',
+  '7GB',
+  '8GB',
+  '9GB',
+  '10GB',
+  '15GB',
+  '20GB',
+  '25GB',
+  '30GB',
+  '35GB',
+  '40GB',
+  '45GB',
+  '50GB',
+  '100GB',
+  '150GB',
+];
 
 const bundlePrices: Record<string, number> = {
-  '1GB': 4.5, '2GB': 9.0, '3GB': 13.0, '4GB': 17.0, '5GB': 21.0,
-  '6GB': 25.0, '8GB': 33.0, '10GB': 40.0, '15GB': 58.0, '20GB': 75.0,
-  '25GB': 92.0, '30GB': 108.0, '40GB': 140.0, '50GB': 175.0,
+  '1GB': 4.5,
+  '2GB': 9.0,
+  '3GB': 13.0,
+  '4GB': 17.0,
+  '5GB': 21.0,
+  '6GB': 25.0,
+  '8GB': 33.0,
+  '10GB': 40.0,
+  '15GB': 58.0,
+  '20GB': 75.0,
+  '25GB': 92.0,
+  '30GB': 108.0,
+  '40GB': 140.0,
+  '50GB': 175.0,
 };
 
-const mtnApiPrices: Record<string, number> = {
-  '1GB': 3.8, '2GB': 7.6, '3GB': 11.4, '4GB': 15.2, '5GB': 19.0,
-  '6GB': 22.8, '8GB': 31.0, '10GB': 37.5, '15GB': 56.0, '20GB': 75.0,
-  '25GB': 95.0, '30GB': 114.0, '40GB': 151.0, '50GB': 190.0,
-};
+function round(n: number) {
+  return Math.round(n * 100) / 100;
+}
 
-function apiCostFor(network: string, bundle: string) {
-  if (network === 'MTN') return mtnApiPrices[bundle] ?? bundlePrices[bundle];
-  return bundlePrices[bundle];
+/** Prefer Smart Data Hub API costs for the editable package costPrice. */
+function apiCostFor(network: string, bundle: string): number | null {
+  if (network === 'MTN') {
+    return getSmartDataHubMtnCost(bundle) ?? bundlePrices[bundle] ?? null;
+  }
+  if (network === 'Telecel') {
+    return getSmartDataHubTelecelCost(bundle) ?? null;
+  }
+  if (network === 'AirtelTigo') {
+    return getSmartDataHubAirtelTigoCost(bundle) ?? null;
+  }
+  return bundlePrices[bundle] ?? null;
 }
 
 async function migrateAgentApiSecrets(): Promise<void> {
@@ -203,36 +247,41 @@ export const seedDatabase = async (): Promise<void> => {
   }
 };
 
-function round(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
 export const ensureNetworkPackages = async () => {
   const latest = await Package.findOne().sort({ sortOrder: -1 }).select('sortOrder');
   let sortOrder = (latest?.sortOrder ?? -1) + 1;
   let created = 0;
+  let updated = 0;
 
   for (const network of networks) {
     for (const bundle of bundles) {
-      const exists = await Package.findOne(dataPackageFilter(network, bundle));
       const base = apiCostFor(network, bundle);
+      if (base == null) continue;
+
+      const exists = await Package.findOne(dataPackageFilter(network, bundle));
       if (exists) {
+        let changed = false;
         if (!exists.productType || exists.productType === 'data') {
           if (exists.productType !== 'data') {
             exists.productType = 'data';
-            await exists.save();
+            changed = true;
           }
         }
-        if (network === 'MTN' && exists.costPrice !== base) {
+        if (exists.costPrice !== base) {
           exists.costPrice = base;
+          changed = true;
+        }
+        if (changed) {
           await exists.save();
+          updated++;
         }
         continue;
       }
-        await Package.create({
-          network,
-          productType: 'data',
-          bundleSize: bundle,
+
+      await Package.create({
+        network,
+        productType: 'data',
+        bundleSize: bundle,
         costPrice: base,
         agentPrice: round(base * 1.05),
         resellerBasePrice: round(base * 1.1),
@@ -244,7 +293,11 @@ export const ensureNetworkPackages = async () => {
     }
   }
 
-  if (created > 0) console.log(`Packages seeded/updated: ${created} bundles for MTN, Telecel, AirtelTigo`);
+  if (created > 0 || updated > 0) {
+    console.log(
+      `Packages synced from Smart Data Hub costs: ${created} created, ${updated} cost prices updated`
+    );
+  }
 };
 
 export const createAgentWithWallet = async (data: {
