@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isBeneficiaryVerificationTriggerStatus,
   isExportedStatus,
+  isPlainPendingStatus,
   shouldPreserveSubmittedForVerification,
   SUBMITTED_FOR_VERIFICATION,
 } from '../services/beneficiaryVerificationService.js';
@@ -77,6 +78,46 @@ test('resolveBulkStatus prefers exported over batch pending', () => {
       orders: [{ status: 'delivered' }, { status: 'exported' }],
     }),
     'delivered'
+  );
+});
+
+test('plain pending does not trigger immediate verification email status', () => {
+  assert.equal(isExportedStatus('pending'), false);
+  assert.equal(isPlainPendingStatus('pending'), true);
+  assert.equal(isPlainPendingStatus('verification_pending'), false);
+  assert.equal(isExportedStatus('verification_pending'), true);
+});
+
+test('pending verification email only after 1 hour', async () => {
+  const { shouldSendPendingVerificationEmail, PENDING_VERIFICATION_EMAIL_DELAY_MS } =
+    await import('../services/beneficiaryVerificationService.js');
+
+  const started = new Date(Date.now() - PENDING_VERIFICATION_EMAIL_DELAY_MS - 1000);
+  const tooRecent = new Date(Date.now() - 5 * 60 * 1000);
+
+  assert.equal(
+    shouldSendPendingVerificationEmail({
+      network: 'MTN',
+      providerStatus: 'pending',
+      statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
+    } as never),
+    true
+  );
+  assert.equal(
+    shouldSendPendingVerificationEmail({
+      network: 'MTN',
+      providerStatus: 'pending',
+      statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: tooRecent }],
+    } as never),
+    false
+  );
+  assert.equal(
+    shouldSendPendingVerificationEmail({
+      network: 'Telecel',
+      providerStatus: 'pending',
+      statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
+    } as never),
+    false
   );
 });
 

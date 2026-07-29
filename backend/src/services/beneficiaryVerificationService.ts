@@ -9,6 +9,8 @@ import { sendMtnNumberVerificationEmail } from '../utils/email';
 
 /** MTN first-time numbers can take up to a week to verify. */
 export const BENEFICIARY_VERIFICATION_DAYS = 7;
+/** SDH "pending" must not email the customer until the order has stayed pending this long. */
+export const PENDING_VERIFICATION_EMAIL_DELAY_MS = 60 * 60 * 1000;
 export const SUBMITTED_FOR_VERIFICATION = 'submitted_for_verification';
 export const VERIFIED_PROVIDER_STATUS = 'verified';
 
@@ -22,9 +24,8 @@ const VERIFICATION_TRIGGER_STATUSES = new Set([
 ]);
 
 /**
- * Email should be sent as soon as Smart Data Hub shows the number has entered
- * the verification-submission flow, whether that comes back as exported,
- * extracted, or submitted_for_verification.
+ * Immediate email triggers (exported / verification submission). Plain SDH "pending"
+ * is intentionally excluded — see pending delay helpers below.
  */
 export function isExportedStatus(raw?: string | null): boolean {
   if (!raw?.trim()) return false;
@@ -37,6 +38,48 @@ export function isExportedStatus(raw?: string | null): boolean {
     normalized === 'verification_pending' ||
     normalized === 'unverified'
   );
+}
+
+/** Smart Data Hub delivery status exactly "pending" (not verification_pending). */
+export function isPlainPendingStatus(raw?: string | null): boolean {
+  if (!raw?.trim()) return false;
+  return raw.toLowerCase().replace(/\s+/g, '_') === 'pending';
+}
+
+/**
+ * Start of the current SDH pending streak from order history.
+ * Used for the 1-hour email delay.
+ */
+export function getSdhPendingStartedAt(order: IOrder): Date | null {
+  if (!isPlainPendingStatus(order.providerStatus)) return null;
+
+  let streakStart: Date | null = null;
+  for (const entry of order.statusHistory || []) {
+    const step = String(entry.step || '')
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+    if (step === 'pending') {
+      if (!streakStart) streakStart = entry.at ? new Date(entry.at) : null;
+    } else {
+      streakStart = null;
+    }
+  }
+
+  if (streakStart) return streakStart;
+  if (order.updatedAt) return new Date(order.updatedAt);
+  if (order.createdAt) return new Date(order.createdAt);
+  return null;
+}
+
+export function shouldSendPendingVerificationEmail(
+  order: IOrder,
+  now: Date = new Date()
+): boolean {
+  if (!isPlainPendingStatus(order.providerStatus)) return false;
+  if (String(order.network || '').toUpperCase() !== 'MTN') return false;
+  const started = getSdhPendingStartedAt(order);
+  if (!started) return false;
+  return now.getTime() - started.getTime() >= PENDING_VERIFICATION_EMAIL_DELAY_MS;
 }
 
 export function normalizeBeneficiaryPhone(phone: string): string {

@@ -19,6 +19,24 @@ export const DATAMAX_MTN_EXPRESS_COSTS: Record<string, number> = {
   '50GB': 177.5,
 };
 
+/** Smart Data Hub MTN API cost prices — GHS (from SDH package list) */
+export const SMART_DATA_HUB_MTN_COSTS: Record<string, number> = {
+  '1GB': 4.1,
+  '2GB': 8.2,
+  '3GB': 12.3,
+  '4GB': 16.4,
+  '5GB': 20.5,
+  '6GB': 24.6,
+  '8GB': 32.8,
+  '10GB': 38.5,
+  '15GB': 57.7,
+  '20GB': 77.0,
+  '25GB': 96.2,
+  '30GB': 115.5,
+  '40GB': 154.0,
+  '50GB': 192.5,
+};
+
 export function normalizeBundleSizeKey(bundleSize: string): string {
   const trimmed = bundleSize.trim().toUpperCase();
   const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*GB$/);
@@ -29,6 +47,11 @@ export function normalizeBundleSizeKey(bundleSize: string): string {
 export function getDatamaxMtnExpressCost(bundleSize: string): number | null {
   const key = normalizeBundleSizeKey(bundleSize);
   return DATAMAX_MTN_EXPRESS_COSTS[key] ?? null;
+}
+
+export function getSmartDataHubMtnCost(bundleSize: string): number | null {
+  const key = normalizeBundleSizeKey(bundleSize);
+  return SMART_DATA_HUB_MTN_COSTS[key] ?? null;
 }
 
 export function resolveOrderApiCost(input: {
@@ -44,8 +67,13 @@ export function resolveOrderApiCost(input: {
   if (input.isAfa) {
     return input.costPrice;
   }
-  if (input.fulfillmentProvider === 'datamax' && input.network === 'MTN') {
-    return getDatamaxMtnExpressCost(input.bundleSize) ?? input.costPrice;
+  if (input.network === 'MTN') {
+    if (input.fulfillmentProvider === 'smartdatahub') {
+      return getSmartDataHubMtnCost(input.bundleSize) ?? input.costPrice;
+    }
+    if (input.fulfillmentProvider === 'datamax') {
+      return getDatamaxMtnExpressCost(input.bundleSize) ?? input.costPrice;
+    }
   }
   return input.costPrice;
 }

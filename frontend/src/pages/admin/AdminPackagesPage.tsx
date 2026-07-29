@@ -28,6 +28,7 @@ type PackageRow = {
   productType?: string;
   costPrice: number;
   datamaxCostPrice?: number | null;
+  smartDataHubCostPrice?: number | null;
   AgentPrice: number;
   resellerBasePrice: number;
   maxSellingPrice: number;
@@ -49,15 +50,16 @@ function resolveMtnFulfillmentProvider(f: FulfillmentSnapshot | null): 'smartdat
 }
 
 function effectiveApiCost(
-  pkg: Pick<PackageRow, 'network' | 'costPrice' | 'datamaxCostPrice'>,
+  pkg: Pick<PackageRow, 'network' | 'costPrice' | 'datamaxCostPrice' | 'smartDataHubCostPrice'>,
   draftCostPrice: number,
   fulfillment: FulfillmentSnapshot | null
 ): number {
-  if (
-    pkg.network === 'MTN' &&
-    pkg.datamaxCostPrice != null &&
-    resolveMtnFulfillmentProvider(fulfillment) === 'datamax'
-  ) {
+  if (pkg.network !== 'MTN') return draftCostPrice;
+  const provider = resolveMtnFulfillmentProvider(fulfillment);
+  if (provider === 'smartdatahub' && pkg.smartDataHubCostPrice != null) {
+    return pkg.smartDataHubCostPrice;
+  }
+  if (provider === 'datamax' && pkg.datamaxCostPrice != null) {
     return pkg.datamaxCostPrice;
   }
   return draftCostPrice;
@@ -407,6 +409,11 @@ export default function AdminPackagesPage() {
                           onChange={(e) => updateDraft(p._id, 'costPrice', e.target.value)}
                           className="w-28 px-2 py-1.5 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400/50"
                         />
+                        {p.network === 'MTN' && p.smartDataHubCostPrice != null && (
+                          <span className="block text-[10px] text-emerald-600 mt-0.5">
+                            Smart Data Hub: {formatCurrency(p.smartDataHubCostPrice)}
+                          </span>
+                        )}
                         {p.network === 'MTN' && p.datamaxCostPrice != null && (
                           <span className="block text-[10px] text-gray-400 mt-0.5">
                             Datamax: {formatCurrency(p.datamaxCostPrice)}

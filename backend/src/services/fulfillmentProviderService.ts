@@ -27,6 +27,8 @@ import {
   VERIFIED_PROVIDER_STATUS,
   applySmartDataHubVerificationOnExported,
   isExportedStatus,
+  isPlainPendingStatus,
+  shouldSendPendingVerificationEmail,
   isBeneficiaryVerificationTriggerStatus,
   markBeneficiaryVerified,
   shouldPreserveSubmittedForVerification,
@@ -672,10 +674,35 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
         return phone && want && (phone === want || phone.endsWith(want.slice(-9)));
       }) || payload.orders?.[0];
 
-    const resolved = resolveSyncedProviderStatus(order, rawStatus);
+    const resolvedBase = resolveSyncedProviderStatus(order, rawStatus);
+    let resolved = resolvedBase;
 
+    // Exported → email immediately. Plain pending → email only after 1 hour.
     if (isExportedStatus(rawStatus)) {
       await applySmartDataHubVerificationOnExported(order);
+    } else if (isPlainPendingStatus(rawStatus)) {
+      // Ensure pending starts are recorded for the 1-hour clock, then check delay.
+      if (order.providerStatus !== 'pending') {
+        await applyOrderStatusUpdate(order, {
+          status: 'processing',
+          providerStatus: 'pending',
+          providerBatchId: payload.batch_id || order.providerBatchId,
+          providerOrderId: line?.id || order.providerOrderId,
+          providerReference: payload.order_number || order.providerReference,
+          stepLabel: 'Gateway Processing',
+          stepMessage: `Delivery status: ${rawStatus}`,
+        });
+      }
+      if (shouldSendPendingVerificationEmail(order)) {
+        await applySmartDataHubVerificationOnExported(order);
+        resolved = {
+          status: 'processing',
+          providerStatus: SUBMITTED_FOR_VERIFICATION,
+          stepLabel: 'Submitted for Verification',
+          stepMessage:
+            'Number still pending after 1 hour — submitted for MTN verification (24–144 hours).',
+        };
+      }
     }
 
     // Avoid rewriting history when nothing meaningful changed.
@@ -851,6 +878,12 @@ export async function syncFulfillmentStatuses(scope: FulfillmentScope = {}, limi
       err instanceof Error ? err.message : err
     );
   });
+  void sendVerificationEmailsForAgedPendingOrders(Math.min(limit, 30)).catch((err) => {
+    console.error(
+      '[sendVerificationEmailsForAgedPendingOrders]',
+      err instanceof Error ? err.message : err
+    );
+  });
 }
 
 /**
@@ -886,10 +919,43 @@ export async function autoDeliverAgedVerificationOrders(limit = 100): Promise<nu
   return delivered;
 }
 
+/**
+ * MTN orders stuck on Smart Data Hub "pending" for ≥ 1 hour get the verification email
+ * (and move into submitted_for_verification). Earlier pending time does not email.
+ */
+export async function sendVerificationEmailsForAgedPendingOrders(limit = 50): Promise<number> {
+  const candidates = await Order.find({
+    network: { $regex: /^mtn$/i },
+    fulfillmentProvider: 'smartdatahub',
+    providerStatus: 'pending',
+    status: { $in: ['pending', 'processing'] },
+  })
+    .sort({ updatedAt: 1 })
+    .limit(Math.max(limit * 3, limit));
+
+  let emailed = 0;
+  for (const order of candidates) {
+    if (!shouldSendPendingVerificationEmail(order)) continue;
+
+    await applySmartDataHubVerificationOnExported(order);
+    await applyOrderStatusUpdate(order, {
+      status: 'processing',
+      providerStatus: SUBMITTED_FOR_VERIFICATION,
+      stepLabel: 'Submitted for Verification',
+      stepMessage:
+        'Number still pending after 1 hour — submitted for MTN verification (24–144 hours).',
+    });
+    emailed++;
+    if (emailed >= limit) break;
+  }
+  return emailed;
+}
+
 /** Background job: mirror Smart Data Hub/Datamax statuses and auto-deliver aged verifications. */
 export async function runFulfillmentBackgroundSync(limit = 80): Promise<{
   synced: number;
   autoDelivered: number;
+  pendingEmails: number;
 }> {
   await retryQueuedFulfillmentOrders(Math.min(limit, 40));
 
@@ -912,8 +978,9 @@ export async function runFulfillmentBackgroundSync(limit = 80): Promise<{
     }
   }
 
+  const pendingEmails = await sendVerificationEmailsForAgedPendingOrders(40);
   const autoDelivered = await autoDeliverAgedVerificationOrders(100);
-  return { synced, autoDelivered };
+  return { synced, autoDelivered, pendingEmails };
 }
 
 export async function getFulfillmentStatusCounts(scope: FulfillmentScope = {}) {
@@ -963,6 +1030,7 @@ export async function syncInFlightOrders(orders: IOrder[]) {
   }
 
   void autoDeliverAgedVerificationOrders(20).catch(() => {});
+  void sendVerificationEmailsForAgedPendingOrders(20).catch(() => {});
 }
 
 export function verifyFulfillmentWebhookSignature(payload: string, signature: string): boolean {
@@ -1010,10 +1078,47 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
   const rawStatus = String(body.status || body.order_status || '');
   if (!rawStatus) return order;
 
-  const resolved = resolveSyncedProviderStatus(order, rawStatus);
+  let resolved = resolveSyncedProviderStatus(order, rawStatus);
 
-  if (order.fulfillmentProvider === 'smartdatahub' && isExportedStatus(rawStatus)) {
-    await applySmartDataHubVerificationOnExported(order);
+  if (order.fulfillmentProvider === 'smartdatahub' || !order.fulfillmentProvider) {
+    if (isExportedStatus(rawStatus)) {
+      await applySmartDataHubVerificationOnExported(order);
+    } else if (isPlainPendingStatus(rawStatus)) {
+      if (order.providerStatus !== 'pending') {
+        await applyOrderStatusUpdate(order, {
+          status: 'processing',
+          providerStatus: 'pending',
+          providerOrderId: String(body.provider_order_id || body.order_id || order.providerOrderId || ''),
+          providerBatchId: String(body.batch_id || order.providerBatchId || ''),
+          providerReference: String(
+            body.provider_reference ||
+              body.order_api_reference ||
+              body.request_id ||
+              order.providerReference ||
+              ''
+          ),
+          stepLabel: 'Gateway Processing',
+          stepMessage: `Delivery status: ${rawStatus}`,
+        });
+      }
+      if (shouldSendPendingVerificationEmail(order)) {
+        await applySmartDataHubVerificationOnExported(order);
+        resolved = {
+          status: 'processing',
+          providerStatus: SUBMITTED_FOR_VERIFICATION,
+          stepLabel: 'Submitted for Verification',
+          stepMessage:
+            'Number still pending after 1 hour — submitted for MTN verification (24–144 hours).',
+        };
+      }
+    }
+  }
+
+  if (
+    order.status === resolved.status &&
+    order.providerStatus === resolved.providerStatus
+  ) {
+    return order;
   }
 
   const updated = await applyOrderStatusUpdate(order, {

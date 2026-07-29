@@ -15,6 +15,7 @@ import {
 import { mapNetworkToProviderCode } from '../services/smartDataHubClient.js';
 import {
   getDatamaxMtnExpressCost,
+  getSmartDataHubMtnCost,
   resolveOrderApiCost,
 } from '../config/datamaxPrices.js';
 import { mapProviderStatus } from '../services/fulfillmentProviderService.js';
@@ -135,6 +136,15 @@ test('getDatamaxMtnExpressCost returns MTN Express dealer prices', () => {
   assert.equal(getDatamaxMtnExpressCost('99GB'), null);
 });
 
+test('getSmartDataHubMtnCost returns SDH MTN API prices', () => {
+  assert.equal(getSmartDataHubMtnCost('1GB'), 4.1);
+  assert.equal(getSmartDataHubMtnCost('5GB'), 20.5);
+  assert.equal(getSmartDataHubMtnCost('10GB'), 38.5);
+  assert.equal(getSmartDataHubMtnCost('40GB'), 154.0);
+  assert.equal(getSmartDataHubMtnCost('50GB'), 192.5);
+  assert.equal(getSmartDataHubMtnCost('99GB'), null);
+});
+
 test('resolveOrderApiCost uses Datamax MTN Express costs when routed to Datamax', () => {
   assert.equal(
     resolveOrderApiCost({
@@ -154,7 +164,17 @@ test('resolveOrderApiCost uses Datamax MTN Express costs when routed to Datamax'
       fulfillmentProvider: 'smartdatahub',
       isAfa: false,
     }),
-    3.8
+    20.5
+  );
+  assert.equal(
+    resolveOrderApiCost({
+      network: 'MTN',
+      bundleSize: '10GB',
+      costPrice: 1,
+      fulfillmentProvider: 'smartdatahub',
+      isAfa: false,
+    }),
+    38.5
   );
   assert.equal(
     resolveOrderApiCost({
