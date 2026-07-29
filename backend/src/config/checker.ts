@@ -5,7 +5,7 @@ export const CHECKER_TYPES: CheckerType[] = ['bece', 'wassce'];
 export const CHECKER_BUNDLE_BECE = 'BECE';
 export const CHECKER_BUNDLE_WASSCE = 'WASSCE';
 
-export const CHECKER_DEFAULT_BASE_PRICE = 17;
+export const CHECKER_DEFAULT_BASE_PRICE = 15;
 export const CHECKER_DEFAULT_MAX_SELL = 30;
 export const CHECKER_DEFAULT_IMAGE = '/images/waec-checker.png';
 

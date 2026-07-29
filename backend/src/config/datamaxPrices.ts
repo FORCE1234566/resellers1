@@ -1,5 +1,6 @@
 import { Network } from '../models/Package';
 import { FulfillmentProvider } from '../models/Setting';
+import { AFA_BASE_PRICE } from './afa';
 
 /** Datamax MTN Express (MTNUP2U) dealer/API cost prices — GHS */
 export const DATAMAX_MTN_EXPRESS_COSTS: Record<string, number> = {
@@ -104,7 +105,7 @@ export function resolveOrderApiCost(input: {
     return input.costPrice;
   }
   if (input.isAfa) {
-    return input.costPrice;
+    return AFA_BASE_PRICE;
   }
   if (input.fulfillmentProvider === 'smartdatahub') {
     if (input.network === 'MTN') {

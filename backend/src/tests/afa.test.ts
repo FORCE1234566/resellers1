@@ -19,6 +19,6 @@ test('isAfaProduct detects afa packages', () => {
   assert.equal(isAfaProduct(undefined, AFA_BUNDLE_SIZE), true);
 });
 
-test('AFA base price is 15 for agents and resellers', () => {
-  assert.equal(AFA_BASE_PRICE, 15);
+test('AFA base price is 14 for MTN AFA registration API cost', () => {
+  assert.equal(AFA_BASE_PRICE, 14);
 });

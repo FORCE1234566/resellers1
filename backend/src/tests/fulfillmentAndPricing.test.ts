@@ -260,7 +260,7 @@ test('resolveOrderApiCost uses Datamax MTN Express costs when routed to Datamax'
       fulfillmentProvider: 'datamax',
       isAfa: true,
     }),
-    15
+    14
   );
 });
 

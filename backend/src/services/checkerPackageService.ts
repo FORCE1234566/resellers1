@@ -23,6 +23,10 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
       existing.isEnabled = true;
       changed = true;
     }
+    if (existing.costPrice !== CHECKER_DEFAULT_BASE_PRICE) {
+      existing.costPrice = CHECKER_DEFAULT_BASE_PRICE;
+      changed = true;
+    }
     if (changed) await existing.save();
     return;
   }
@@ -30,6 +34,9 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
   const legacy = await Package.findOne({ network: 'MTN', bundleSize, productType: { $ne: 'checker' } });
   if (legacy) {
     legacy.productType = 'checker';
+    if (legacy.costPrice !== CHECKER_DEFAULT_BASE_PRICE) {
+      legacy.costPrice = CHECKER_DEFAULT_BASE_PRICE;
+    }
     await legacy.save();
     return;
   }

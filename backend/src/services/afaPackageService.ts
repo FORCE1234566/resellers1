@@ -19,7 +19,10 @@ export async function ensureAfaPackage(): Promise<void> {
       existing.productType = 'afa';
       changed = true;
     }
-    // Do not reset admin-edited prices on startup (matches checker package migration).
+    if (existing.costPrice !== AFA_BASE_PRICE) {
+      existing.costPrice = AFA_BASE_PRICE;
+      changed = true;
+    }
     if (changed) await existing.save();
     return;
   }

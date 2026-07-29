@@ -1,5 +1,6 @@
 export const AFA_BUNDLE_SIZE = 'AFA Registration';
-export const AFA_BASE_PRICE = 15;
+/** MTN AFA registration API/platform cost — GHS */
+export const AFA_BASE_PRICE = 14;
 export const AFA_DEFAULT_MAX_SELL = 25;
 export const AFA_DEFAULT_IMAGE = '/images/afa.jpg';
 export const AFA_CHECK_USSD = '*1848#';
