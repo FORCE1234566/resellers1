@@ -89,14 +89,18 @@ export async function handlePaystackWebhook(req: Request, res: Response): Promis
 }
 
 export async function handleFulfillmentWebhookRoute(req: Request, res: Response): Promise<void> {
-  const signature = (req.headers['x-fulfillment-signature'] ||
-    req.headers['x-webhook-signature']) as string | undefined;
+  const signature = (
+    req.headers['x-fulfillment-signature'] ||
+    req.headers['x-webhook-signature'] ||
+    req.headers['x-signature'] ||
+    req.headers['x-sdh-signature']
+  ) as string | undefined;
   const payload = rawPayload(req);
 
-  if (env.nodeEnv === 'production' && env.fulfillment.webhookSecret && !signature) {
-    throw new AppError('Missing fulfillment signature', 400);
-  }
+  // Smart Data Hub delivery webhooks often have no signature header.
+  // Only reject when a signature IS sent and does not match.
   if (signature && !verifyFulfillmentWebhookSignature(payload, signature)) {
+    console.warn('[fulfillment webhook] invalid signature');
     res.status(400).json({ success: false, message: 'Invalid signature' });
     return;
   }
@@ -111,10 +115,23 @@ export async function handleFulfillmentWebhookRoute(req: Request, res: Response)
 
   try {
     const order = await handleFulfillmentWebhook(body);
-    res.json({ success: true, data: { orderId: order.orderId, status: order.status } });
+    res.json({
+      success: true,
+      data: {
+        orderId: order.orderId,
+        status: order.status,
+        providerStatus: order.providerStatus,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Webhook handling failed';
-    res.status(404).json({ success: false, message });
+    console.error('[fulfillment webhook]', message, JSON.stringify(body).slice(0, 500));
+    // Acknowledge unknown refs so Smart Data Hub does not keep marking deliveries failed.
+    if (/not found|missing order reference/i.test(message)) {
+      res.status(200).json({ success: false, message });
+      return;
+    }
+    res.status(400).json({ success: false, message });
   }
 }
 

@@ -190,7 +190,7 @@ export function buildDefaultHistory(order: IOrder): StatusHistoryEntry[] {
             : 'Order marked as not delivered'
           : isAfa
             ? `Processing — check with ${AFA_CHECK_USSD} after ${AFA_PROCESSING_HOURS} hours`
-            : 'Awaiting delivery confirmation',
+          : 'Awaiting delivery confirmation',
       done: delivered,
       at: order.updatedAt,
     },
@@ -526,7 +526,7 @@ function providerStatusRank(raw?: string | null): number {
  */
 export function resolveBulkStatus(
   data: {
-    status?: string;
+  status?: string;
     orders?: { status?: string; phone_number?: string }[];
   },
   options?: { phone?: string }
@@ -1034,48 +1034,117 @@ export async function syncInFlightOrders(orders: IOrder[]) {
 }
 
 export function verifyFulfillmentWebhookSignature(payload: string, signature: string): boolean {
-  if (!env.fulfillment.webhookSecret) return env.nodeEnv !== 'production';
+  if (!env.fulfillment.webhookSecret) return true;
+  const provided = signature.trim().replace(/^sha256=/i, '');
   const hash = crypto
     .createHmac('sha256', env.fulfillment.webhookSecret)
     .update(payload)
     .digest('hex');
-  return secureCompare(hash, signature);
+  return secureCompare(hash, provided);
+}
+
+function unwrapWebhookBody(body: Record<string, unknown>): Record<string, unknown> {
+  const data = body.data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    return { ...body, ...(data as Record<string, unknown>) };
+  }
+  const order = body.order;
+  if (order && typeof order === 'object' && !Array.isArray(order)) {
+    return { ...body, ...(order as Record<string, unknown>) };
+  }
+  return body;
+}
+
+function extractWebhookStatus(body: Record<string, unknown>): string {
+  const direct = String(body.status || body.order_status || body.delivery_status || '').trim();
+  if (direct) return direct;
+
+  const orders = body.orders;
+  if (Array.isArray(orders) && orders.length > 0) {
+    const statuses = orders
+      .map((o) =>
+        o && typeof o === 'object'
+          ? String((o as Record<string, unknown>).status || '').trim()
+          : ''
+      )
+      .filter(Boolean);
+    if (statuses.some((s) => ['delivered', 'completed', 'success', 'successful'].includes(s.toLowerCase()))) {
+      return 'delivered';
+    }
+    if (statuses.some((s) => ['failed', 'error', 'rejected'].includes(s.toLowerCase()))) {
+      return 'failed';
+    }
+    const exported = statuses.find((s) => isExportedStatus(s));
+    if (exported) return exported;
+    return statuses[0] || '';
+  }
+  return '';
 }
 
 export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
+  const payload = unwrapWebhookBody(body);
+
   const reference = String(
-    body.reference ||
-      body.orderId ||
-      body.order_id ||
-      body.order_number ||
-      body.external_reference ||
-      body.request_id ||
+    payload.reference ||
+      payload.orderId ||
+      payload.order_id ||
+      payload.order_number ||
+      payload.external_reference ||
+      payload.request_id ||
+      payload.client_reference ||
       ''
   );
   const providerRef = String(
-    body.provider_reference || body.api_reference || body.order_api_reference || body.id || ''
+    payload.provider_reference ||
+      payload.api_reference ||
+      payload.order_api_reference ||
+      payload.batch_id ||
+      payload.id ||
+      ''
   );
-  if (!reference && !providerRef) throw new Error('Missing order reference');
+  const phone = String(
+    payload.phone_number ||
+      payload.beneficiary_number ||
+      payload.recipientPhone ||
+      payload.phone ||
+      ''
+  ).replace(/\D/g, '');
 
-  const order = await Order.findOne({
-    $or: [
+  if (!reference && !providerRef && !phone) throw new Error('Missing order reference');
+
+  const or: Record<string, unknown>[] = [];
+  if (reference) {
+    or.push(
       { orderId: reference },
       { providerOrderId: reference },
       { providerReference: reference },
-      { providerBatchId: reference },
-      ...(providerRef
-        ? [
-            { providerReference: providerRef },
-            { providerOrderId: providerRef },
-            { providerBatchId: providerRef },
-          ]
-        : []),
-    ],
-  });
+      { providerBatchId: reference }
+    );
+  }
+  if (providerRef) {
+    or.push(
+      { providerReference: providerRef },
+      { providerOrderId: providerRef },
+      { providerBatchId: providerRef },
+      { orderId: providerRef }
+    );
+  }
+
+  let order = or.length > 0 ? await Order.findOne({ $or: or }) : null;
+
+  // Fallback: match recent in-flight order by beneficiary phone.
+  if (!order && phone.length >= 9) {
+    const phoneTail = phone.slice(-9);
+    order = await Order.findOne({
+      status: { $in: ['pending', 'processing'] },
+      recipientPhone: { $regex: `${phoneTail}$` },
+      fulfillmentProvider: { $in: ['smartdatahub', null] },
+    }).sort({ updatedAt: -1 });
+  }
 
   if (!order) throw new Error('Order not found');
 
-  const rawStatus = String(body.status || body.order_status || '');
+  const rawStatus = extractWebhookStatus(payload);
   if (!rawStatus) return order;
 
   let resolved = resolveSyncedProviderStatus(order, rawStatus);
@@ -1088,12 +1157,15 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
         await applyOrderStatusUpdate(order, {
           status: 'processing',
           providerStatus: 'pending',
-          providerOrderId: String(body.provider_order_id || body.order_id || order.providerOrderId || ''),
-          providerBatchId: String(body.batch_id || order.providerBatchId || ''),
+          providerOrderId: String(
+            payload.provider_order_id || payload.order_id || order.providerOrderId || ''
+          ),
+          providerBatchId: String(payload.batch_id || order.providerBatchId || ''),
           providerReference: String(
-            body.provider_reference ||
-              body.order_api_reference ||
-              body.request_id ||
+            payload.provider_reference ||
+              payload.order_api_reference ||
+              payload.order_number ||
+              payload.request_id ||
               order.providerReference ||
               ''
           ),
@@ -1124,16 +1196,23 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
   const updated = await applyOrderStatusUpdate(order, {
     status: resolved.status,
     providerStatus: resolved.providerStatus,
-    providerOrderId: String(body.provider_order_id || body.order_id || order.providerOrderId || ''),
-    providerBatchId: String(body.batch_id || order.providerBatchId || ''),
+    providerOrderId: String(
+      payload.provider_order_id || payload.order_id || order.providerOrderId || ''
+    ),
+    providerBatchId: String(payload.batch_id || order.providerBatchId || ''),
     providerReference: String(
-      body.provider_reference || body.order_api_reference || body.request_id || order.providerReference || ''
+      payload.provider_reference ||
+        payload.order_api_reference ||
+        payload.order_number ||
+        payload.request_id ||
+        order.providerReference ||
+        ''
     ),
     stepLabel: resolved.stepLabel,
     stepMessage: resolved.stepMessage,
   });
 
-  if (resolved.status === 'delivered' && order.fulfillmentProvider === 'smartdatahub') {
+  if (resolved.status === 'delivered' && (order.fulfillmentProvider === 'smartdatahub' || !order.fulfillmentProvider)) {
     await markBeneficiaryVerified(order.recipientPhone, order.network, order.orderId);
   }
 
