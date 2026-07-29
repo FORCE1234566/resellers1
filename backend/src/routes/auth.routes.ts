@@ -414,8 +414,15 @@ router.post(
     user.loginLockedUntil = undefined;
     await user.save();
 
+    // Re-read OTP flag from DB so a just-re-enabled agent toggle is never stale.
+    const otpFlags = await User.findById(user._id).select('emailOtpEnabled role').lean();
+    const otpUser = {
+      role: otpFlags?.role || user.role,
+      emailOtpEnabled: otpFlags?.emailOtpEnabled,
+    };
+
     // Skip email OTP when dev flag or role OTP is disabled in admin settings
-    if (await shouldSkipEmailOtpForUser(user)) {
+    if (await shouldSkipEmailOtpForUser(otpUser)) {
       user.lastLogin = new Date();
       if (user.status === 'pending' && user.role === 'reseller') {
         user.status = 'active';
@@ -436,9 +443,16 @@ router.post(
     if (!prefersTotp) {
       await sendAuthOtpOrFail(normalizedEmail);
     } else if (roleRequiresMfa(user.role)) {
-      void createAndSendOtp(normalizedEmail).catch((err) => {
-        console.error('[Login backup OTP email failed]', normalizedEmail, err instanceof Error ? err.message : err);
-      });
+      // Still try email backup so agent/reseller can use inbox OTP if authenticator fails.
+      try {
+        await sendAuthOtpOrFail(normalizedEmail);
+      } catch (err) {
+        console.error(
+          '[Login backup OTP email failed]',
+          normalizedEmail,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
 
     res.json({
@@ -452,6 +466,7 @@ router.post(
         requiresOtp: !prefersTotp,
         requiresTotp: prefersTotp,
         emailOtpBackup: true,
+        otpEmailSent: !prefersTotp,
         mfaRecommended: roleRequiresMfa(user.role) && !user.totpEnabled,
       },
     });

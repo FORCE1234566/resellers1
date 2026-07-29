@@ -61,7 +61,7 @@ export async function isRoleEmailOtpEnabled(role: 'reseller' | 'agent'): Promise
 
 export async function shouldSkipEmailOtpForUser(user: {
   role: string;
-  emailOtpEnabled?: boolean;
+  emailOtpEnabled?: boolean | null;
 }): Promise<boolean> {
   if (process.env.DEV_SKIP_OTP === 'true') return true;
   if (user.role === 'reseller') {
@@ -71,6 +71,7 @@ export async function shouldSkipEmailOtpForUser(user: {
   } else {
     return false;
   }
+  // Only skip when explicitly disabled. Missing/undefined/true all require OTP.
   return user.emailOtpEnabled === false;
 }
 

@@ -42,8 +42,25 @@ export default function VerifyOtpPage() {
     }
     setEmail(stored);
     const mode = sessionStorage.getItem('mfaMode');
-    setMfaMode(mode === 'totp' ? 'totp' : 'email');
+    const resolvedMode = mode === 'totp' ? 'totp' : 'email';
+    setMfaMode(resolvedMode);
     setTimeout(() => inputs.current[0]?.focus(), 100);
+
+    // Re-send inbox OTP when landing on this page so agents always get a code
+    // after admin re-enables email OTP (login send can race or be dropped).
+    const autoKey = `otpAutoResent:${stored}`;
+    if (resolvedMode === 'email' && !sessionStorage.getItem(autoKey)) {
+      sessionStorage.setItem(autoKey, '1');
+      void (async () => {
+        try {
+          await api.post('/auth/resend-otp', { email: stored });
+          setResendMessage('A new code has been sent. Check your inbox and spam folder.');
+          setResendCooldown(30);
+        } catch (err) {
+          console.error('Auto OTP resend failed', err);
+        }
+      })();
+    }
   }, [navigate, redirectToLogin]);
 
   const submitOtp = useCallback(async (code: string) => {
