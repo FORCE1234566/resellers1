@@ -64,11 +64,11 @@ function effectiveApiCost(
     }
   }
   if (
-    pkg.network === 'Telecel' &&
+    (pkg.network === 'Telecel' || pkg.network === 'AirtelTigo') &&
     pkg.smartDataHubCostPrice != null &&
     fulfillment?.enabled !== false
   ) {
-    const route = fulfillment?.networkRouting?.Telecel ?? 'default';
+    const route = fulfillment?.networkRouting?.[pkg.network] ?? 'default';
     const provider =
       route === 'off'
         ? null

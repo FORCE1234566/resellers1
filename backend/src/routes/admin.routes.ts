@@ -13,7 +13,12 @@ import { Wallet } from '../models/Wallet';
 import { WalletTransaction } from '../models/WalletTransaction';
 import { AuditLog } from '../models/AuditLog';
 import { Setting } from '../models/Setting';
-import { getDatamaxMtnExpressCost, getSmartDataHubMtnCost, getSmartDataHubTelecelCost } from '../config/datamaxPrices';
+import {
+  getDatamaxMtnExpressCost,
+  getSmartDataHubMtnCost,
+  getSmartDataHubTelecelCost,
+  getSmartDataHubAirtelTigoCost,
+} from '../config/datamaxPrices';
 import { getDateRanges } from '../utils/helpers';
 import { parseBundleSizeMb, sortPackagesByBundleSize } from '../utils/bundleSize';
 import { createAgentWithWallet, ensureNetworkPackages } from '../services/seedService';
@@ -628,6 +633,9 @@ router.get('/packages', asyncHandler(async (_req, res) => {
       : {}),
     ...(pkg.network === 'Telecel'
       ? { smartDataHubCostPrice: getSmartDataHubTelecelCost(pkg.bundleSize) }
+      : {}),
+    ...(pkg.network === 'AirtelTigo'
+      ? { smartDataHubCostPrice: getSmartDataHubAirtelTigoCost(pkg.bundleSize) }
       : {}),
   }));
   res.json({ success: true, data });

@@ -17,6 +17,7 @@ import {
   getDatamaxMtnExpressCost,
   getSmartDataHubMtnCost,
   getSmartDataHubTelecelCost,
+  getSmartDataHubAirtelTigoCost,
   resolveOrderApiCost,
 } from '../config/datamaxPrices.js';
 import { mapProviderStatus } from '../services/fulfillmentProviderService.js';
@@ -128,6 +129,27 @@ test('mapNetworkToProviderCode maps Telecel to vodafone for Smart Data Hub', () 
   assert.equal(mapNetworkToProviderCode('MTN'), 'mtn');
   assert.equal(mapNetworkToProviderCode('Telecel'), 'vodafone');
   assert.equal(mapNetworkToProviderCode('AirtelTigo'), 'at');
+});
+
+test('getSmartDataHubAirtelTigoCost returns SDH Ishare API prices', () => {
+  assert.equal(getSmartDataHubAirtelTigoCost('1GB'), 4.0);
+  assert.equal(getSmartDataHubAirtelTigoCost('4GB'), 15.6);
+  assert.equal(getSmartDataHubAirtelTigoCost('7GB'), 26.9);
+  assert.equal(getSmartDataHubAirtelTigoCost('10GB'), 37.5);
+  assert.equal(getSmartDataHubAirtelTigoCost('50GB'), null);
+});
+
+test('resolveOrderApiCost uses Smart Data Hub AirtelTigo costs', () => {
+  assert.equal(
+    resolveOrderApiCost({
+      network: 'AirtelTigo',
+      bundleSize: '5GB',
+      costPrice: 1,
+      fulfillmentProvider: 'smartdatahub',
+      isAfa: false,
+    }),
+    19.5
+  );
 });
 
 test('getSmartDataHubTelecelCost returns SDH Telecel/Vodafone API prices', () => {

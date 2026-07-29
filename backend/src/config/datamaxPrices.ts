@@ -52,6 +52,20 @@ export const SMART_DATA_HUB_TELECEL_COSTS: Record<string, number> = {
   '150GB': 535.0,
 };
 
+/** Smart Data Hub AirtelTigo (Ishare) API cost prices — GHS */
+export const SMART_DATA_HUB_AIRTELTIGO_COSTS: Record<string, number> = {
+  '1GB': 4.0,
+  '2GB': 8.0,
+  '3GB': 12.0,
+  '4GB': 15.6,
+  '5GB': 19.5,
+  '6GB': 23.2,
+  '7GB': 26.9,
+  '8GB': 30.9,
+  '9GB': 34.3,
+  '10GB': 37.5,
+};
+
 export function normalizeBundleSizeKey(bundleSize: string): string {
   const trimmed = bundleSize.trim().toUpperCase();
   const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*GB$/);
@@ -74,6 +88,11 @@ export function getSmartDataHubTelecelCost(bundleSize: string): number | null {
   return SMART_DATA_HUB_TELECEL_COSTS[key] ?? null;
 }
 
+export function getSmartDataHubAirtelTigoCost(bundleSize: string): number | null {
+  const key = normalizeBundleSizeKey(bundleSize);
+  return SMART_DATA_HUB_AIRTELTIGO_COSTS[key] ?? null;
+}
+
 export function resolveOrderApiCost(input: {
   network: Network;
   bundleSize: string;
@@ -93,6 +112,9 @@ export function resolveOrderApiCost(input: {
     }
     if (input.network === 'Telecel') {
       return getSmartDataHubTelecelCost(input.bundleSize) ?? input.costPrice;
+    }
+    if (input.network === 'AirtelTigo') {
+      return getSmartDataHubAirtelTigoCost(input.bundleSize) ?? input.costPrice;
     }
   }
   if (input.fulfillmentProvider === 'datamax' && input.network === 'MTN') {
