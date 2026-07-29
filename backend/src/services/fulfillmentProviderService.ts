@@ -524,10 +524,27 @@ function providerStatusRank(raw?: string | null): number {
  * Pick the most advanced status from Smart Data Hub bulk payload.
  * Line-item statuses (e.g. exported) win over a stale batch-level pending.
  */
+function linePhoneDigits(line: {
+  phone_number?: string;
+  beneficiary_number?: string;
+  _beneficiary_number?: string;
+  phone?: string;
+}): string {
+  return String(
+    line.phone_number || line.beneficiary_number || line._beneficiary_number || line.phone || ''
+  ).replace(/\D/g, '');
+}
+
 export function resolveBulkStatus(
   data: {
-  status?: string;
-    orders?: { status?: string; phone_number?: string }[];
+    status?: string;
+    orders?: {
+      status?: string;
+      phone_number?: string;
+      beneficiary_number?: string;
+      _beneficiary_number?: string;
+      phone?: string;
+    }[];
   },
   options?: { phone?: string }
 ): string {
@@ -535,9 +552,13 @@ export function resolveBulkStatus(
   const matched =
     options?.phone && orders.length > 0
       ? orders.find((o) => {
-          const phone = String(o.phone_number || '').replace(/\D/g, '');
+          const phone = linePhoneDigits(o);
           const want = String(options.phone || '').replace(/\D/g, '');
-          return phone && want && (phone === want || phone.endsWith(want.slice(-9)) || want.endsWith(phone.slice(-9)));
+          return (
+            phone &&
+            want &&
+            (phone === want || phone.endsWith(want.slice(-9)) || want.endsWith(phone.slice(-9)))
+          );
         })
       : undefined;
 
@@ -669,9 +690,13 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
 
     const line =
       payload.orders?.find((o) => {
-        const phone = String(o.phone_number || '').replace(/\D/g, '');
+        const phone = linePhoneDigits(o);
         const want = String(order.recipientPhone || '').replace(/\D/g, '');
-        return phone && want && (phone === want || phone.endsWith(want.slice(-9)));
+        return (
+          phone &&
+          want &&
+          (phone === want || phone.endsWith(want.slice(-9)) || want.endsWith(phone.slice(-9)))
+        );
       }) || payload.orders?.[0];
 
     const resolvedBase = resolveSyncedProviderStatus(order, rawStatus);
@@ -1055,99 +1080,179 @@ function unwrapWebhookBody(body: Record<string, unknown>): Record<string, unknow
   return body;
 }
 
-function extractWebhookStatus(body: Record<string, unknown>): string {
-  const direct = String(body.status || body.order_status || body.delivery_status || '').trim();
-  if (direct) return direct;
+function asWebhookRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
-  const orders = body.orders;
-  if (Array.isArray(orders) && orders.length > 0) {
-    const statuses = orders
-      .map((o) =>
-        o && typeof o === 'object'
-          ? String((o as Record<string, unknown>).status || '').trim()
-          : ''
-      )
-      .filter(Boolean);
-    if (statuses.some((s) => ['delivered', 'completed', 'success', 'successful'].includes(s.toLowerCase()))) {
-      return 'delivered';
+function collectWebhookRefs(payload: Record<string, unknown>): string[] {
+  const refs = [
+    payload.reference,
+    payload.orderId,
+    payload.order_id,
+    payload.orderNumber,
+    payload.order_number,
+    payload.external_reference,
+    payload.externalOrderId,
+    payload.client_reference,
+    payload.request_id,
+    payload.provider_reference,
+    payload.api_reference,
+    payload.order_api_reference,
+    payload.batch_id,
+    payload.batchId,
+    payload.id,
+  ]
+    .map((v) => String(v || '').trim())
+    .filter(Boolean);
+
+  const orders = Array.isArray(payload.orders) ? payload.orders : [];
+  for (const raw of orders) {
+    const line = asWebhookRecord(raw);
+    if (!line) continue;
+    for (const key of [
+      'id',
+      'order_number',
+      'orderNumber',
+      'order_api_reference',
+      'order_api_ref',
+      'reference',
+      'batch_id',
+    ]) {
+      const value = String(line[key] || '').trim();
+      if (value) refs.push(value);
     }
-    if (statuses.some((s) => ['failed', 'error', 'rejected'].includes(s.toLowerCase()))) {
-      return 'failed';
-    }
-    const exported = statuses.find((s) => isExportedStatus(s));
-    if (exported) return exported;
-    return statuses[0] || '';
   }
-  return '';
+
+  return [...new Set(refs)];
+}
+
+function collectWebhookPhones(payload: Record<string, unknown>): string[] {
+  const phones = [
+    payload.phone_number,
+    payload.beneficiary_number,
+    payload._beneficiary_number,
+    payload.recipientPhone,
+    payload.phone,
+  ]
+    .map((v) => String(v || '').replace(/\D/g, ''))
+    .filter((p) => p.length >= 9);
+
+  const orders = Array.isArray(payload.orders) ? payload.orders : [];
+  for (const raw of orders) {
+    const line = asWebhookRecord(raw);
+    if (!line) continue;
+    for (const key of ['phone_number', 'beneficiary_number', '_beneficiary_number', 'phone']) {
+      const phone = String(line[key] || '').replace(/\D/g, '');
+      if (phone.length >= 9) phones.push(phone);
+    }
+  }
+
+  return [...new Set(phones)];
+}
+
+function extractWebhookStatus(payload: Record<string, unknown>): string {
+  const orders = (Array.isArray(payload.orders) ? payload.orders : [])
+    .map((raw) => asWebhookRecord(raw))
+    .filter((line): line is Record<string, unknown> => Boolean(line))
+    .map((line) => ({
+      status: String(
+        line.status || line.order_status || line.delivery_status || line.newStatus || ''
+      ).trim(),
+      phone_number: String(
+        line.phone_number || line.beneficiary_number || line._beneficiary_number || line.phone || ''
+      ),
+    }));
+
+  // Prefer strongest line-item status over a stale batch-level pending.
+  return resolveBulkStatus({
+    status: String(
+      payload.status ||
+        payload.order_status ||
+        payload.delivery_status ||
+        payload.newStatus ||
+        payload.new_status ||
+        ''
+    ).trim(),
+    orders,
+  });
+}
+
+async function findOrderForWebhook(payload: Record<string, unknown>): Promise<IOrder | null> {
+  const refs = collectWebhookRefs(payload);
+  if (refs.length > 0) {
+    const order = await Order.findOne({
+      $or: [
+        { orderId: { $in: refs } },
+        { orderNumber: { $in: refs } },
+        { providerOrderId: { $in: refs } },
+        { providerReference: { $in: refs } },
+        { providerBatchId: { $in: refs } },
+      ],
+    }).sort({ updatedAt: -1 });
+    if (order) return order;
+  }
+
+  const phones = collectWebhookPhones(payload);
+  for (const phone of phones) {
+    const phoneTail = phone.slice(-9);
+    const order = await Order.findOne({
+      status: { $in: ['pending', 'processing'] },
+      $or: [
+        { recipientPhone: phone },
+        { recipientPhone: phoneTail },
+        { recipientPhone: { $regex: `${phoneTail}$` } },
+      ],
+    }).sort({ updatedAt: -1 });
+    if (order) return order;
+  }
+
+  return null;
 }
 
 export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
   const payload = unwrapWebhookBody(body);
-
-  const reference = String(
-    payload.reference ||
-      payload.orderId ||
-      payload.order_id ||
-      payload.order_number ||
-      payload.external_reference ||
-      payload.request_id ||
-      payload.client_reference ||
-      ''
+  console.log(
+    '[fulfillment webhook] received',
+    JSON.stringify({
+      keys: Object.keys(payload),
+      refs: collectWebhookRefs(payload).slice(0, 8),
+      phones: collectWebhookPhones(payload).slice(0, 3),
+      status: extractWebhookStatus(payload),
+    })
   );
-  const providerRef = String(
-    payload.provider_reference ||
-      payload.api_reference ||
-      payload.order_api_reference ||
-      payload.batch_id ||
-      payload.id ||
-      ''
-  );
-  const phone = String(
-    payload.phone_number ||
-      payload.beneficiary_number ||
-      payload.recipientPhone ||
-      payload.phone ||
-      ''
-  ).replace(/\D/g, '');
 
-  if (!reference && !providerRef && !phone) throw new Error('Missing order reference');
-
-  const or: Record<string, unknown>[] = [];
-  if (reference) {
-    or.push(
-      { orderId: reference },
-      { providerOrderId: reference },
-      { providerReference: reference },
-      { providerBatchId: reference }
-    );
-  }
-  if (providerRef) {
-    or.push(
-      { providerReference: providerRef },
-      { providerOrderId: providerRef },
-      { providerBatchId: providerRef },
-      { orderId: providerRef }
-    );
-  }
-
-  let order = or.length > 0 ? await Order.findOne({ $or: or }) : null;
-
-  // Fallback: match recent in-flight order by beneficiary phone.
-  if (!order && phone.length >= 9) {
-    const phoneTail = phone.slice(-9);
-    order = await Order.findOne({
-      status: { $in: ['pending', 'processing'] },
-      recipientPhone: { $regex: `${phoneTail}$` },
-      fulfillmentProvider: { $in: ['smartdatahub', null] },
-    }).sort({ updatedAt: -1 });
-  }
-
+  const order = await findOrderForWebhook(payload);
   if (!order) throw new Error('Order not found');
 
   const rawStatus = extractWebhookStatus(payload);
-  if (!rawStatus) return order;
+  if (!rawStatus) {
+    console.warn('[fulfillment webhook] no status in payload for', order.orderId);
+    return order;
+  }
 
   let resolved = resolveSyncedProviderStatus(order, rawStatus);
+  const line =
+    (Array.isArray(payload.orders) ? payload.orders : [])
+      .map((raw) => asWebhookRecord(raw))
+      .find((entry) => entry && String(entry.status || '').trim()) || null;
+
+  const nextProviderOrderId = String(
+    line?.id || payload.provider_order_id || payload.order_id || order.providerOrderId || ''
+  );
+  const nextProviderBatchId = String(
+    payload.batch_id || payload.batchId || order.providerBatchId || ''
+  );
+  const nextProviderReference = String(
+    payload.provider_reference ||
+      payload.order_api_reference ||
+      payload.order_number ||
+      payload.orderNumber ||
+      payload.request_id ||
+      order.providerReference ||
+      ''
+  );
 
   if (order.fulfillmentProvider === 'smartdatahub' || !order.fulfillmentProvider) {
     if (isExportedStatus(rawStatus)) {
@@ -1157,18 +1262,9 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
         await applyOrderStatusUpdate(order, {
           status: 'processing',
           providerStatus: 'pending',
-          providerOrderId: String(
-            payload.provider_order_id || payload.order_id || order.providerOrderId || ''
-          ),
-          providerBatchId: String(payload.batch_id || order.providerBatchId || ''),
-          providerReference: String(
-            payload.provider_reference ||
-              payload.order_api_reference ||
-              payload.order_number ||
-              payload.request_id ||
-              order.providerReference ||
-              ''
-          ),
+          providerOrderId: nextProviderOrderId,
+          providerBatchId: nextProviderBatchId,
+          providerReference: nextProviderReference,
           stepLabel: 'Gateway Processing',
           stepMessage: `Delivery status: ${rawStatus}`,
         });
@@ -1196,25 +1292,25 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
   const updated = await applyOrderStatusUpdate(order, {
     status: resolved.status,
     providerStatus: resolved.providerStatus,
-    providerOrderId: String(
-      payload.provider_order_id || payload.order_id || order.providerOrderId || ''
-    ),
-    providerBatchId: String(payload.batch_id || order.providerBatchId || ''),
-    providerReference: String(
-      payload.provider_reference ||
-        payload.order_api_reference ||
-        payload.order_number ||
-        payload.request_id ||
-        order.providerReference ||
-        ''
-    ),
+    providerOrderId: nextProviderOrderId,
+    providerBatchId: nextProviderBatchId,
+    providerReference: nextProviderReference,
     stepLabel: resolved.stepLabel,
     stepMessage: resolved.stepMessage,
   });
 
-  if (resolved.status === 'delivered' && (order.fulfillmentProvider === 'smartdatahub' || !order.fulfillmentProvider)) {
+  if (
+    resolved.status === 'delivered' &&
+    (order.fulfillmentProvider === 'smartdatahub' || !order.fulfillmentProvider)
+  ) {
     await markBeneficiaryVerified(order.recipientPhone, order.network, order.orderId);
   }
+
+  console.log(
+    '[fulfillment webhook] updated',
+    updated.orderId,
+    `${order.status}/${order.providerStatus} -> ${updated.status}/${updated.providerStatus}`
+  );
 
   return updated;
 }

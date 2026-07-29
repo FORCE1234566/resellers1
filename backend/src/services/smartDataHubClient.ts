@@ -133,6 +133,9 @@ export interface SmartDataHubBulkOrder {
   id?: string;
   order_number?: string;
   phone_number?: string;
+  beneficiary_number?: string;
+  _beneficiary_number?: string;
+  phone?: string;
   status?: string;
   order_api_reference?: string;
   fulfilled_at?: string;
