@@ -131,27 +131,6 @@ test('mapNetworkToProviderCode maps Telecel to vodafone for Smart Data Hub', () 
   assert.equal(mapNetworkToProviderCode('AirtelTigo'), 'at');
 });
 
-test('getSmartDataHubAirtelTigoCost returns SDH Ishare API prices', () => {
-  assert.equal(getSmartDataHubAirtelTigoCost('1GB'), 4.0);
-  assert.equal(getSmartDataHubAirtelTigoCost('4GB'), 15.6);
-  assert.equal(getSmartDataHubAirtelTigoCost('7GB'), 26.9);
-  assert.equal(getSmartDataHubAirtelTigoCost('10GB'), 37.5);
-  assert.equal(getSmartDataHubAirtelTigoCost('50GB'), null);
-});
-
-test('resolveOrderApiCost uses Smart Data Hub AirtelTigo costs', () => {
-  assert.equal(
-    resolveOrderApiCost({
-      network: 'AirtelTigo',
-      bundleSize: '5GB',
-      costPrice: 1,
-      fulfillmentProvider: 'smartdatahub',
-      isAfa: false,
-    }),
-    19.5
-  );
-});
-
 test('getSmartDataHubTelecelCost returns SDH Telecel/Vodafone API prices', () => {
   assert.equal(getSmartDataHubTelecelCost('10GB'), 38.0);
   assert.equal(getSmartDataHubTelecelCost('35GB'), 134.0);
@@ -181,6 +160,38 @@ test('resolveOrderApiCost uses Smart Data Hub Telecel costs', () => {
       isAfa: false,
     }),
     355.0
+  );
+});
+
+test('getSmartDataHubAirtelTigoCost returns SDH Ishare API prices', () => {
+  assert.equal(getSmartDataHubAirtelTigoCost('1GB'), 4.0);
+  assert.equal(getSmartDataHubAirtelTigoCost('4GB'), 15.6);
+  assert.equal(getSmartDataHubAirtelTigoCost('7GB'), 26.9);
+  assert.equal(getSmartDataHubAirtelTigoCost('9GB'), 34.3);
+  assert.equal(getSmartDataHubAirtelTigoCost('10GB'), 37.5);
+  assert.equal(getSmartDataHubAirtelTigoCost('50GB'), null);
+});
+
+test('resolveOrderApiCost uses Smart Data Hub AirtelTigo costs', () => {
+  assert.equal(
+    resolveOrderApiCost({
+      network: 'AirtelTigo',
+      bundleSize: '5GB',
+      costPrice: 1,
+      fulfillmentProvider: 'smartdatahub',
+      isAfa: false,
+    }),
+    19.5
+  );
+  assert.equal(
+    resolveOrderApiCost({
+      network: 'AirtelTigo',
+      bundleSize: '10GB',
+      costPrice: 1,
+      fulfillmentProvider: 'smartdatahub',
+      isAfa: false,
+    }),
+    37.5
   );
 });
 

@@ -41,11 +41,14 @@ type FulfillmentSnapshot = {
   networkRouting: Record<string, 'default' | 'smartdatahub' | 'datamax' | 'off'>;
 };
 
-function resolveMtnFulfillmentProvider(f: FulfillmentSnapshot | null): 'smartdatahub' | 'datamax' | null {
-  if (!f?.enabled) return null;
-  const route = f.networkRouting.MTN ?? 'default';
+function resolveNetworkFulfillmentProvider(
+  fulfillment: FulfillmentSnapshot | null,
+  network: string
+): 'smartdatahub' | 'datamax' | null {
+  if (!fulfillment?.enabled) return null;
+  const route = fulfillment.networkRouting[network] ?? 'default';
   if (route === 'off') return null;
-  if (route === 'default') return f.defaultProvider;
+  if (route === 'default') return fulfillment.defaultProvider;
   return route;
 }
 
@@ -54,28 +57,12 @@ function effectiveApiCost(
   draftCostPrice: number,
   fulfillment: FulfillmentSnapshot | null
 ): number {
-  if (pkg.network === 'MTN') {
-    const provider = resolveMtnFulfillmentProvider(fulfillment);
-    if (provider === 'smartdatahub' && pkg.smartDataHubCostPrice != null) {
-      return pkg.smartDataHubCostPrice;
-    }
-    if (provider === 'datamax' && pkg.datamaxCostPrice != null) {
-      return pkg.datamaxCostPrice;
-    }
+  const provider = resolveNetworkFulfillmentProvider(fulfillment, pkg.network);
+  if (provider === 'smartdatahub' && pkg.smartDataHubCostPrice != null) {
+    return pkg.smartDataHubCostPrice;
   }
-  if (
-    (pkg.network === 'Telecel' || pkg.network === 'AirtelTigo') &&
-    pkg.smartDataHubCostPrice != null &&
-    fulfillment?.enabled !== false
-  ) {
-    const route = fulfillment?.networkRouting?.[pkg.network] ?? 'default';
-    const provider =
-      route === 'off'
-        ? null
-        : route === 'default'
-          ? fulfillment?.defaultProvider
-          : route;
-    if (provider === 'smartdatahub') return pkg.smartDataHubCostPrice;
+  if (pkg.network === 'MTN' && provider === 'datamax' && pkg.datamaxCostPrice != null) {
+    return pkg.datamaxCostPrice;
   }
   return draftCostPrice;
 }

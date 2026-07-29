@@ -52,7 +52,7 @@ export const SMART_DATA_HUB_TELECEL_COSTS: Record<string, number> = {
   '150GB': 535.0,
 };
 
-/** Smart Data Hub AirtelTigo (Ishare) API cost prices — GHS */
+/** Smart Data Hub AirtelTigo Ishare API cost prices — GHS */
 export const SMART_DATA_HUB_AIRTELTIGO_COSTS: Record<string, number> = {
   '1GB': 4.0,
   '2GB': 8.0,
