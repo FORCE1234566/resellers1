@@ -21,7 +21,7 @@ import {
   roleRequiresMfa,
   verifyTotpCode,
 } from '../services/totpService';
-import { createAndSendOtp, sendAuthOtpOrFail, verifyOtp, incrementOtpAttempts } from '../utils/otp';
+import { sendAuthOtpOrFail, verifyOtp, incrementOtpAttempts } from '../utils/otp';
 import { signAccessToken } from '../utils/jwt';
 import { EmailDeliveryError, sendPasswordResetEmail } from '../utils/email';
 import { getCanonicalFrontendUrl } from '../config/urls';

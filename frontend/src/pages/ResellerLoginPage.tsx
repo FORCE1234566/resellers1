@@ -31,6 +31,7 @@ export default function ResellerLoginPage() {
       if (result.requiresOtp) {
         sessionStorage.setItem('otpEmail', result.email || email);
         sessionStorage.setItem('otpRole', 'reseller');
+        sessionStorage.removeItem(`otpAutoResent:${(result.email || email).toLowerCase()}`);
         navigate('/verify-otp');
       } else {
         navigate(dashboardRouteForRole(result.user?.role || 'reseller'));
