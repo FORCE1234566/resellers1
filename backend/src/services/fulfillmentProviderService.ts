@@ -230,10 +230,15 @@ export function getOrderTracking(order: IOrder, options?: { forClient?: boolean 
   };
 }
 
-async function notifyStatusChange(order: IOrder, prevStatus: OrderStatus) {
-  if (order.status === prevStatus) return;
+async function notifyStatusChange(
+  order: IOrder,
+  prevStatus: OrderStatus,
+  prevProviderStatus?: string | null
+) {
+  const statusChanged = order.status !== prevStatus;
+  const providerChanged = (order.providerStatus || null) !== (prevProviderStatus || null);
 
-  if (order.resellerId && order.status === 'delivered') {
+  if (statusChanged && order.resellerId && order.status === 'delivered') {
     if (order.profit > 0) {
       await creditWallet(
         order.resellerId,
@@ -263,7 +268,7 @@ async function notifyStatusChange(order: IOrder, prevStatus: OrderStatus) {
       `Order ${order.orderId} has been delivered successfully.`
     );
   }
-  if (order.agentId && order.status === 'delivered') {
+  if (statusChanged && order.agentId && order.status === 'delivered') {
     await createNotification(
       order.agentId,
       'order_delivered',
@@ -271,8 +276,13 @@ async function notifyStatusChange(order: IOrder, prevStatus: OrderStatus) {
       `Order ${order.orderId} has been delivered successfully.`
     );
   }
-  if (order.agentId && ['delivered', 'failed'].includes(order.status)) {
-    await notifyagentWebhook(order);
+
+  // Push every meaningful status/provider change to connected agent websites.
+  if (order.agentId && (statusChanged || providerChanged)) {
+    void notifyagentWebhook(order, {
+      prevStatus,
+      prevProviderStatus,
+    }).catch(() => {});
   }
 }
 
@@ -290,6 +300,7 @@ export async function applyOrderStatusUpdate(
   }
 ) {
   const prevStatus = order.status;
+  const prevProviderStatus = order.providerStatus || null;
 
   if (update.providerOrderId) order.providerOrderId = update.providerOrderId;
   if (update.providerBatchId) order.providerBatchId = update.providerBatchId;
@@ -312,7 +323,7 @@ export async function applyOrderStatusUpdate(
   }
 
   await order.save();
-  await notifyStatusChange(order, prevStatus);
+  await notifyStatusChange(order, prevStatus, prevProviderStatus);
   return order;
 }
 
@@ -494,23 +505,58 @@ export async function submitOrderToProvider(order: IOrder): Promise<IOrder | nul
   return submitToSmartDataHub(order);
 }
 
-function resolveBulkStatus(data: {
-  status?: string;
-  orders?: { status?: string }[];
-}): string {
-  if (data.status) return data.status;
+function providerStatusRank(raw?: string | null): number {
+  if (!raw?.trim()) return 0;
+  const s = raw.toLowerCase().replace(/\s+/g, '_');
+  if (['delivered', 'completed', 'success', 'successful'].includes(s)) return 100;
+  if (['failed', 'error', 'rejected'].includes(s)) return 90;
+  if (['cancelled', 'canceled', 'refunded'].includes(s)) return 85;
+  // Prefer verification/export over generic pending/processing so MTN emails fire.
+  if (isExportedStatus(s) || isBeneficiaryVerificationTriggerStatus(s)) return 80;
+  if (['processing', 'in_progress', 'placed', 'gateway_processing'].includes(s)) return 40;
+  if (['pending', 'awaiting', 'created'].includes(s)) return 20;
+  return 10;
+}
+
+/**
+ * Pick the most advanced status from Smart Data Hub bulk payload.
+ * Line-item statuses (e.g. exported) win over a stale batch-level pending.
+ */
+export function resolveBulkStatus(
+  data: {
+    status?: string;
+    orders?: { status?: string; phone_number?: string }[];
+  },
+  options?: { phone?: string }
+): string {
   const orders = data.orders || [];
-  if (orders.length === 0) return '';
-  if (orders.every((o) => o.status === 'delivered')) return 'completed';
-  if (orders.some((o) => o.status === 'failed')) return 'failed';
-  // Prefer exported status when present (triggers verification email)
-  const exportedLine = orders.find((o) => isExportedStatus(o.status));
-  if (exportedLine?.status) return exportedLine.status;
-  const verificationLine = orders.find((o) =>
-    isBeneficiaryVerificationTriggerStatus(o.status)
-  );
-  if (verificationLine?.status) return verificationLine.status;
-  return orders[0]?.status || 'processing';
+  const matched =
+    options?.phone && orders.length > 0
+      ? orders.find((o) => {
+          const phone = String(o.phone_number || '').replace(/\D/g, '');
+          const want = String(options.phone || '').replace(/\D/g, '');
+          return phone && want && (phone === want || phone.endsWith(want.slice(-9)) || want.endsWith(phone.slice(-9)));
+        })
+      : undefined;
+
+  const candidates = [
+    matched?.status,
+    ...orders.map((o) => o.status),
+    data.status,
+  ].filter((s): s is string => Boolean(s && String(s).trim()));
+
+  if (candidates.length === 0) return '';
+
+  let best = candidates[0];
+  let bestRank = providerStatusRank(best);
+  for (const candidate of candidates.slice(1)) {
+    const rank = providerStatusRank(candidate);
+    if (rank > bestRank) {
+      best = candidate;
+      bestRank = rank;
+    }
+  }
+  return best;
 }
 
 function resolveSyncedProviderStatus(
@@ -520,7 +566,7 @@ function resolveSyncedProviderStatus(
   const normalizedRaw = rawStatus.toLowerCase().replace(/\s+/g, '_');
   const mappedStatus = mapProviderStatus(rawStatus);
 
-  // Only "exported" enters the verification display state (email sent separately).
+  // Exported / verification-submission statuses enter MTN verification display + email.
   if (isExportedStatus(normalizedRaw)) {
     return {
       status: 'processing',
@@ -558,12 +604,46 @@ function resolveSyncedProviderStatus(
     };
   }
 
+  // Smart Data Hub "pending" must still sync onto TopDeals (keep order in-flight).
+  if (mappedStatus === 'pending') {
+    return {
+      status: 'processing',
+      providerStatus: 'pending',
+      stepLabel: 'Gateway Processing',
+      stepMessage: `Delivery status: ${rawStatus}`,
+    };
+  }
+
   return {
     status: mappedStatus,
     providerStatus: normalizedRaw,
     stepLabel: 'Gateway Processing',
     stepMessage: `Delivery status: ${rawStatus}`,
   };
+}
+
+async function fetchSmartDataHubStatusForOrder(order: IOrder) {
+  const refs = [
+    ...new Set(
+      [order.providerReference, order.providerBatchId, order.providerOrderId, order.orderId]
+        .map((v) => String(v || '').trim())
+        .filter(Boolean)
+    ),
+  ];
+
+  let lastError: unknown;
+  for (const ref of refs) {
+    try {
+      return await fetchSmartDataHubBulkStatus(ref);
+    } catch (err) {
+      lastError = err;
+      if (err instanceof SmartDataHubError && err.statusCode === 404) {
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Smart Data Hub status lookup failed');
 }
 
 async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
@@ -579,18 +659,31 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
     return submitOrderToProvider(order);
   }
 
-  const ref = order.providerReference || order.orderId;
   try {
-    const response = await fetchSmartDataHubBulkStatus(ref);
+    const response = await fetchSmartDataHubStatusForOrder(order);
     const payload = response.data;
-    const rawStatus = resolveBulkStatus(payload);
+    const rawStatus = resolveBulkStatus(payload, { phone: order.recipientPhone });
     if (!rawStatus) return order;
 
-    const line = payload.orders?.[0];
+    const line =
+      payload.orders?.find((o) => {
+        const phone = String(o.phone_number || '').replace(/\D/g, '');
+        const want = String(order.recipientPhone || '').replace(/\D/g, '');
+        return phone && want && (phone === want || phone.endsWith(want.slice(-9)));
+      }) || payload.orders?.[0];
+
     const resolved = resolveSyncedProviderStatus(order, rawStatus);
 
     if (isExportedStatus(rawStatus)) {
       await applySmartDataHubVerificationOnExported(order);
+    }
+
+    // Avoid rewriting history when nothing meaningful changed.
+    if (
+      order.status === resolved.status &&
+      order.providerStatus === resolved.providerStatus
+    ) {
+      return order;
     }
 
     const updated = await applyOrderStatusUpdate(order, {
@@ -612,6 +705,11 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
     if (err instanceof SmartDataHubError && err.statusCode === 404) {
       return submitOrderToProvider(order);
     }
+    console.error(
+      '[Smart Data Hub sync failed]',
+      order.orderId,
+      err instanceof Error ? err.message : err
+    );
     return order;
   }
 }
@@ -703,17 +801,47 @@ function scopeFilter(scope: FulfillmentScope = {}): Record<string, unknown> {
 
 /** Pull latest provider statuses into MongoDB before dashboards/lists render. */
 export async function syncFulfillmentStatuses(scope: FulfillmentScope = {}, limit = 50) {
-  await retryQueuedFulfillmentOrders(Math.min(limit, 30));
+  void retryQueuedFulfillmentOrders(Math.min(limit, 30)).catch((err) => {
+    console.error('[retryQueuedFulfillmentOrders]', err instanceof Error ? err.message : err);
+  });
 
-  const orders = await Order.find({
+  // Prefer Smart Data Hub in-flight MTN orders so exported/pending sync into verification.
+  const sdhFirst = await Order.find({
     ...scopeFilter(scope),
     status: { $in: ['pending', 'processing'] },
+    fulfillmentProvider: 'smartdatahub',
+    providerStatus: {
+      $in: [
+        'gateway_processing',
+        'pending',
+        'exported',
+        'extracted',
+        SUBMITTED_FOR_VERIFICATION,
+        'processing',
+        'placed',
+      ],
+    },
   })
     .sort({ updatedAt: 1 })
     .limit(limit);
 
-  for (const order of orders) {
-    await syncOrderFromProvider(order);
+  const remaining = Math.max(0, limit - sdhFirst.length);
+  const others =
+    remaining > 0
+      ? await Order.find({
+          ...scopeFilter(scope),
+          status: { $in: ['pending', 'processing'] },
+          _id: { $nin: sdhFirst.map((o) => o._id) },
+        })
+          .sort({ updatedAt: 1 })
+          .limit(remaining)
+      : [];
+
+  const orders = [...sdhFirst, ...others];
+  const chunkSize = 5;
+  for (let i = 0; i < orders.length; i += chunkSize) {
+    const chunk = orders.slice(i, i + chunkSize);
+    await Promise.all(chunk.map((order) => syncOrderFromProvider(order).catch(() => null)));
   }
 
   // Also promote aged verification orders so dashboards stay current without waiting for cron.
@@ -806,11 +934,32 @@ export async function getFulfillmentStatusCounts(scope: FulfillmentScope = {}) {
 }
 
 export async function syncInFlightOrders(orders: IOrder[]) {
-  await retryQueuedFulfillmentOrders();
+  // Retry queued submits, but don't block list sync if the queue is large/slow.
+  void retryQueuedFulfillmentOrders(15).catch((err) => {
+    console.error('[retryQueuedFulfillmentOrders]', err instanceof Error ? err.message : err);
+  });
 
-  const inFlight = orders.filter((o) => ['pending', 'processing'].includes(o.status)).slice(0, 20);
-  for (const order of inFlight) {
-    await syncOrderFromProvider(order);
+  const inFlight = orders
+    .filter((o) => ['pending', 'processing'].includes(o.status))
+    .sort((a, b) => {
+      const rank = (o: IOrder) => {
+        const ps = String(o.providerStatus || '');
+        if (o.fulfillmentProvider === 'smartdatahub') {
+          if (['gateway_processing', 'pending', 'exported', SUBMITTED_FOR_VERIFICATION].includes(ps)) {
+            return 0;
+          }
+          return 1;
+        }
+        return 2;
+      };
+      return rank(a) - rank(b);
+    })
+    .slice(0, 25);
+
+  const chunkSize = 5;
+  for (let i = 0; i < inFlight.length; i += chunkSize) {
+    const chunk = inFlight.slice(i, i + chunkSize);
+    await Promise.all(chunk.map((order) => syncOrderFromProvider(order).catch(() => null)));
   }
 
   void autoDeliverAgedVerificationOrders(20).catch(() => {});

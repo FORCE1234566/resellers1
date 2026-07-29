@@ -400,21 +400,20 @@ router.get('/api/credentials', asyncHandler(async (req: AuthRequest, res) => {
     throw new AppError('API access not approved yet', 403);
   }
 
-  let oneTimeSecret: string | undefined;
-  if (dealer.agentApi?.secretKey) {
-    oneTimeSecret = dealer.agentApi.secretKey;
-    dealer.agentApi.secretKey = undefined;
-    dealer.markModified('agentApi');
-    await dealer.save();
+  // Agents who only have a hash (legacy wipe) can't recover the old secret —
+  // issue a fresh one so the Developer API page always shows a real value.
+  let secretKey = dealer.agentApi?.secretKey;
+  if (!secretKey && dealer.agentApi?.secretKeyHash) {
+    const { rotateAgentApiSecret } = await import('../services/agentSecretService');
+    secretKey = await rotateAgentApiSecret(dealer);
   }
 
-  const hasHash = Boolean(dealer.agentApi?.secretKeyHash);
   res.json({
     success: true,
     data: {
       ...serializeAgentApiStatus(dealer),
       apiKey: dealer.agentApi?.apiKey,
-      secretKey: oneTimeSecret ?? (hasHash ? '••••••••••••••••' : undefined),
+      secretKey,
       ipWhitelist: dealer.agentApi?.ipWhitelist,
       webhookUrl: dealer.agentApi?.webhookUrl,
     },
@@ -428,7 +427,19 @@ router.put('/api/settings', asyncHandler(async (req: AuthRequest, res) => {
   }
 
   if (req.body.ipWhitelist) dealer.agentApi!.ipWhitelist = req.body.ipWhitelist;
-  if (req.body.webhookUrl !== undefined) dealer.agentApi!.webhookUrl = req.body.webhookUrl;
+  if (req.body.webhookUrl !== undefined) {
+    const raw = String(req.body.webhookUrl || '');
+    const urls = raw
+      .split(/[\n,]+/)
+      .map((u) => u.trim())
+      .filter(Boolean);
+    for (const url of urls) {
+      if (!/^https?:\/\//i.test(url)) {
+        throw new AppError(`Invalid webhook URL (must start with http:// or https://): ${url}`);
+      }
+    }
+    dealer.agentApi!.webhookUrl = urls.join('\n');
+  }
   await dealer.save();
 
   res.json({ success: true, data: dealer.agentApi });
@@ -447,7 +458,7 @@ router.post('/api/regenerate', asyncHandler(async (req: AuthRequest, res) => {
 
   res.json({
     success: true,
-    message: 'Store this secret now — it will not be shown again.',
+    message: 'API keys regenerated.',
     data: { apiKey: dealer.agentApi!.apiKey, secretKey: plaintextSecret },
   });
 }));

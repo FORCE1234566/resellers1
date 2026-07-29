@@ -30,7 +30,7 @@ export interface IResellerStore {
 
 export interface IAgentApi {
   apiKey?: string;
-  /** @deprecated Plaintext secrets are migrated to secretKeyHash — never returned via API */
+  /** Plaintext kept select:false for agent dashboard display; secretKeyHash used for API auth */
   secretKey?: string;
   secretKeyHash?: string;
   ipWhitelist: string[];

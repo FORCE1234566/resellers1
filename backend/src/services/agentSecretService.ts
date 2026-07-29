@@ -22,7 +22,7 @@ export async function verifyAgentSecret(
   return false;
 }
 
-/** Generate a new secret, store only the bcrypt hash, return plaintext once for the agent. */
+/** Generate a new secret, store hash + plaintext for dashboard display, return plaintext. */
 export async function rotateAgentApiSecret(agent: IUser): Promise<string> {
   if (!agent.agentApi) {
     throw new Error('Agent API not configured');
@@ -30,7 +30,7 @@ export async function rotateAgentApiSecret(agent: IUser): Promise<string> {
 
   const plaintext = generateSecretKey();
   agent.agentApi.secretKeyHash = await hashAgentSecret(plaintext);
-  agent.agentApi.secretKey = undefined;
+  agent.agentApi.secretKey = plaintext;
   agent.markModified('agentApi');
   await agent.save();
 
@@ -40,16 +40,15 @@ export async function rotateAgentApiSecret(agent: IUser): Promise<string> {
 export async function setInitialAgentApiSecret(agentApi: IUser['agentApi'], plaintext: string) {
   if (!agentApi) return;
   agentApi.secretKeyHash = await hashAgentSecret(plaintext);
-  agentApi.secretKey = undefined;
+  agentApi.secretKey = plaintext;
 }
 
-/** Migrate legacy plaintext secret to bcrypt hash in place. */
+/** Migrate legacy plaintext secret to bcrypt hash while keeping plaintext for the dashboard. */
 export async function migrateAgentSecretIfNeeded(agent: IUser): Promise<void> {
   const api = agent.agentApi;
   if (!api || api.secretKeyHash || !api.secretKey) return;
 
   api.secretKeyHash = await hashAgentSecret(api.secretKey);
-  api.secretKey = undefined;
   agent.markModified('agentApi');
   await agent.save();
 }

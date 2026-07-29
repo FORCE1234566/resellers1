@@ -4,7 +4,6 @@ import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
 import Textarea from '@/components/ui/Textarea';
 import { useNavigate } from 'react-router-dom';
 import { Copy, Check, BookOpen, Key, Shield, Clock, XCircle } from 'lucide-react';
@@ -328,11 +327,6 @@ export default function AgentApiPage() {
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3">
               Never share your secret key publicly or commit it to source control.
             </p>
-            {typeof creds.secretKey === 'string' && !String(creds.secretKey).startsWith('•') && (
-              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
-                Save your secret key now — it will not be shown again. Use Regenerate keys if you lose it.
-              </p>
-            )}
             <Button size="sm" variant="outline" onClick={regenerate}>Regenerate keys</Button>
           </CardBody>
         </Card>
@@ -352,12 +346,16 @@ export default function AgentApiPage() {
               placeholder="203.0.113.10&#10;203.0.113.11"
               rows={3}
             />
-            <Input
-              label="Webhook URL (optional)"
+            <Textarea
+              label="Webhook URLs (one URL per line — all connected sites get status updates)"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://your-server.com/webhooks/databundle"
+              placeholder={'https://site-a.com/webhooks/topdeals\nhttps://site-b.com/api/status'}
+              rows={3}
             />
+            <p className="text-xs text-gray-500 -mt-2">
+              When an order status changes, we POST JSON to every URL listed here (signed with your secret key).
+            </p>
             {settingsMsg && <p className="text-sm text-emerald-700">{settingsMsg}</p>}
             {settingsError && <p className="text-sm text-red-600">{settingsError}</p>}
             <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
@@ -631,6 +629,41 @@ Headers:
                 <span key={s} className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-mono capitalize">{s}</span>
               ))}
             </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Status webhooks</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Set one or more webhook URLs in Security settings. Whenever your order status updates
+              (processing, submitted for verification, delivered, failed, etc.), we POST to every URL.
+            </p>
+            <CodeBlock
+              code={`POST https://your-site.com/webhooks/topdeals
+Headers:
+  Content-Type: application/json
+  X-TopDeals-Event: order.delivered
+  X-TopDeals-Signature: sha256=<hmac_of_raw_body_using_your_secret_key>
+
+{
+  "event": "order.delivered",
+  "orderId": "TD-ABC123",
+  "status": "delivered",
+  "providerStatus": "delivered",
+  "recipientPhone": "0244123456",
+  "network": "MTN",
+  "bundleSize": "1GB",
+  "sellingPrice": 4.5,
+  "productType": "data",
+  "source": "agent_api",
+  "providerReference": "...",
+  "updatedAt": "2026-07-29T09:00:00.000Z",
+  "createdAt": "2026-07-29T08:55:00.000Z"
+}`}
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Verify <code className="font-mono">X-TopDeals-Signature</code> with HMAC-SHA256 of the
+              raw request body using your secret key.
+            </p>
           </div>
 
           <div>
