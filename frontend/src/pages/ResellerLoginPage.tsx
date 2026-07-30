@@ -31,6 +31,9 @@ export default function ResellerLoginPage() {
       if (result.requiresOtp) {
         sessionStorage.setItem('otpEmail', result.email || email);
         sessionStorage.setItem('otpRole', 'reseller');
+        sessionStorage.setItem('mfaMode', 'email');
+        sessionStorage.setItem('otpEmailSent', result.otpEmailSent ? '1' : '0');
+        sessionStorage.setItem('otpSmsSent', result.otpSmsSent ? '1' : '0');
         sessionStorage.removeItem(`otpAutoResent:${(result.email || email).toLowerCase()}`);
         navigate('/verify-otp');
       } else {

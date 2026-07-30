@@ -34,6 +34,9 @@ export default function AdminLoginPage() {
         sessionStorage.setItem('otpEmail', result.email || email);
         sessionStorage.setItem('otpRole', 'admin');
         sessionStorage.setItem('mfaMode', result.requiresTotp ? 'totp' : 'email');
+        sessionStorage.setItem('otpEmailSent', result.otpEmailSent ? '1' : '0');
+        sessionStorage.setItem('otpSmsSent', result.otpSmsSent ? '1' : '0');
+        sessionStorage.removeItem(`otpAutoResent:${(result.email || email).toLowerCase()}`);
         navigate('/verify-otp');
       } else {
         navigate(dashboardRouteForRole(result.user?.role || 'admin'));

@@ -1,3 +1,5 @@
+import { PLATFORM_NAME } from '../config/brand';
+import { env } from '../config/env';
 import { normalizeGhanaPhone } from '../utils/phone';
 
 export type CheckerSmsPayload = {
@@ -8,6 +10,10 @@ export type CheckerSmsPayload = {
 
 const ARKESEL_SEND_URL = 'https://sms.arkesel.com/api/v2/sms/send';
 const WAEC_RESULTS_URL = 'https://ghana.waecdirect.org/';
+
+export function isSmsConfigured(): boolean {
+  return Boolean(process.env.SMS_API_KEY?.trim());
+}
 
 export function buildCheckerMessage(payload: CheckerSmsPayload): string {
   return [
@@ -35,7 +41,10 @@ export async function sendSms(to: string, message: string): Promise<void> {
   const apiUrl = process.env.SMS_API_URL?.trim() || ARKESEL_SEND_URL;
 
   if (!apiKey) {
-    console.log(`[SMS Dev] To: ${to} | Sender: ${senderId} | ${message}`);
+    console.warn('[SMS] SMS_API_KEY not set — message not sent to', to);
+    if (env.nodeEnv !== 'production' && !process.env.VERCEL) {
+      console.log(`[SMS Dev] To: ${to} | Sender: ${senderId} | ${message}`);
+    }
     return;
   }
 
@@ -78,4 +87,12 @@ export async function sendSms(to: string, message: string): Promise<void> {
 
 export async function sendCheckerSms(to: string, payload: CheckerSmsPayload): Promise<void> {
   await sendSms(to, buildCheckerMessage(payload));
+}
+
+export async function sendOtpSms(to: string, code: string): Promise<void> {
+  if (!isSmsConfigured()) {
+    throw new Error('SMS is not configured. Set SMS_API_KEY and SMS_SENDER_ID.');
+  }
+  const message = `${PLATFORM_NAME} code: ${code}. Valid 10 minutes. Do not share.`;
+  await sendSms(to, message);
 }

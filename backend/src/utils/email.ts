@@ -81,8 +81,23 @@ async function sendViaResend({ to, subject, text, html }: MailPayload): Promise<
   }
 }
 
+export function isEmailTransportConfigured(): boolean {
+  return Boolean(env.resendApiKey?.trim() || env.smtp.user?.trim());
+}
+
+function assertEmailConfiguredForSend(): void {
+  if (isEmailTransportConfigured()) return;
+  const onServerless = Boolean(process.env.VERCEL) || env.nodeEnv === 'production';
+  if (onServerless) {
+    throw new Error(
+      'Email is not configured. Set RESEND_API_KEY + RESEND_FROM (recommended) or SMTP_USER + SMTP_PASS.'
+    );
+  }
+}
+
 async function sendViaSmtp({ to, subject, text, html }: MailPayload): Promise<void> {
   if (!env.smtp.user) {
+    assertEmailConfiguredForSend();
     console.log(`[Email Dev] To: ${to} | Subject: ${subject}`);
     console.log(text);
     return;
@@ -136,7 +151,8 @@ export class EmailDeliveryError extends AppError {
 }
 
 export const sendEmail = async (to: string, subject: string, html: string): Promise<void> => {
-  if (!env.smtp.user && !env.resendApiKey) {
+  if (!isEmailTransportConfigured()) {
+    assertEmailConfiguredForSend();
     console.log(`[Email Dev] To: ${to} | Subject: ${subject}`);
     console.log(html);
     return;

@@ -38,6 +38,8 @@ interface LoginResult {
   requiresOtp: boolean;
   requiresTotp?: boolean;
   emailOtpBackup?: boolean;
+  otpEmailSent?: boolean;
+  otpSmsSent?: boolean;
   mfaRecommended?: boolean;
   email?: string;
   role?: string;

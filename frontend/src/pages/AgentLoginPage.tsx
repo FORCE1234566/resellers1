@@ -32,6 +32,8 @@ export default function AgentLoginPage() {
         sessionStorage.setItem('otpEmail', result.email || email);
         sessionStorage.setItem('otpRole', 'agent');
         sessionStorage.setItem('mfaMode', result.requiresTotp ? 'totp' : 'email');
+        sessionStorage.setItem('otpEmailSent', result.otpEmailSent ? '1' : '0');
+        sessionStorage.setItem('otpSmsSent', result.otpSmsSent ? '1' : '0');
         sessionStorage.removeItem(`otpAutoResent:${(result.email || email).toLowerCase()}`);
         navigate('/verify-otp');
       } else {

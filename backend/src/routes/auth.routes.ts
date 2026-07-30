@@ -118,7 +118,7 @@ async function handleExistingRegistrationEmail(
       await existing.save();
       return 'activated';
     }
-    await sendAuthOtpOrFail(email);
+    await sendAuthOtpOrFail(email, { phone: existing.phone });
     return 'otp_sent';
   }
   throw new AppError(
@@ -215,11 +215,11 @@ router.post(
       return;
     }
 
-    await sendAuthOtpOrFail(email);
+    await sendAuthOtpOrFail(email, { phone });
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify OTP sent to your email.',
+      message: 'Registration successful. Please verify OTP sent to your email or phone.',
       data: { email: user.email, requiresOtp: true },
     });
   })
@@ -363,11 +363,11 @@ router.post(
       return;
     }
 
-    await sendAuthOtpOrFail(email);
+    await sendAuthOtpOrFail(email, { phone });
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify OTP sent to your email.',
+      message: 'Registration successful. Please verify OTP sent to your email or phone.',
       data: { email: user.email, requiresOtp: true },
     });
   })
@@ -440,15 +440,16 @@ router.post(
     }
 
     const prefersTotp = prefersTotpLogin(user);
+    let delivery = { emailSent: false, smsSent: false };
     if (!prefersTotp) {
-      await sendAuthOtpOrFail(normalizedEmail);
+      delivery = await sendAuthOtpOrFail(normalizedEmail, { phone: user.phone });
     } else if (roleRequiresMfa(user.role)) {
-      // Still try email backup so agent/reseller can use inbox OTP if authenticator fails.
+      // Still try email/SMS backup so agent/reseller can use inbox OTP if authenticator fails.
       try {
-        await sendAuthOtpOrFail(normalizedEmail);
+        delivery = await sendAuthOtpOrFail(normalizedEmail, { phone: user.phone });
       } catch (err) {
         console.error(
-          '[Login backup OTP email failed]',
+          '[Login backup OTP delivery failed]',
           normalizedEmail,
           err instanceof Error ? err.message : err
         );
@@ -458,15 +459,20 @@ router.post(
     res.json({
       success: true,
       message: prefersTotp
-        ? 'Enter your authenticator code, or use the email OTP backup'
-        : 'OTP sent to your email',
+        ? 'Enter your authenticator code, or use the email/SMS OTP backup'
+        : delivery.smsSent && delivery.emailSent
+          ? 'OTP sent to your email and phone'
+          : delivery.smsSent
+            ? 'OTP sent to your phone by SMS'
+            : 'OTP sent to your email',
       data: {
         email: user.email,
         role: user.role,
         requiresOtp: !prefersTotp,
         requiresTotp: prefersTotp,
         emailOtpBackup: true,
-        otpEmailSent: !prefersTotp,
+        otpEmailSent: delivery.emailSent,
+        otpSmsSent: delivery.smsSent,
         mfaRecommended: roleRequiresMfa(user.role) && !user.totpEnabled,
       },
     });
@@ -648,10 +654,26 @@ router.post(
 
     const normalizedEmail = normalizeAuthEmail(email);
     const user = await User.findOne({ email: normalizedEmail });
-    if (user) {
-      await sendAuthOtpOrFail(normalizedEmail);
+    if (!user) {
+      res.json({
+        success: true,
+        message: 'If an account exists, a new OTP has been sent.',
+        data: { emailSent: false, smsSent: false },
+      });
+      return;
     }
-    res.json({ success: true, message: 'If an account exists, a new OTP has been sent.' });
+
+    const delivery = await sendAuthOtpOrFail(normalizedEmail, { phone: user.phone });
+    res.json({
+      success: true,
+      message:
+        delivery.smsSent && delivery.emailSent
+          ? 'A new code was sent to your email and phone.'
+          : delivery.smsSent
+            ? 'A new code was sent to your phone by SMS.'
+            : 'A new code was sent to your email.',
+      data: delivery,
+    });
   })
 );
 

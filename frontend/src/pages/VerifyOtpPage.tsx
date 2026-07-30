@@ -5,6 +5,21 @@ import { useNavigate } from 'react-router-dom';
 import BrandLogo from '@/components/ui/BrandLogo';
 import BackHomeLink from '@/components/ui/BackHomeLink';
 
+type OtpDelivery = { emailSent?: boolean; smsSent?: boolean };
+
+function deliveryMessage(delivery?: OtpDelivery | null): string {
+  if (delivery?.smsSent && delivery?.emailSent) {
+    return 'A new code has been sent to your email and phone SMS. Check inbox, spam, and texts.';
+  }
+  if (delivery?.smsSent) {
+    return 'A new code has been sent to your phone by SMS.';
+  }
+  if (delivery?.emailSent) {
+    return 'A new code has been sent to your email. Check inbox and spam folder.';
+  }
+  return 'A new code has been sent. Check your email inbox, spam folder, and phone SMS.';
+}
+
 export default function VerifyOtpPage() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [email, setEmail] = useState('');
@@ -46,18 +61,28 @@ export default function VerifyOtpPage() {
     setMfaMode(resolvedMode);
     setTimeout(() => inputs.current[0]?.focus(), 100);
 
-    // Re-send inbox OTP when landing on this page so agents always get a code
-    // after admin re-enables email OTP (login send can race or be dropped).
+    const emailAlreadySent = sessionStorage.getItem('otpEmailSent') === '1';
+    const smsAlreadySent = sessionStorage.getItem('otpSmsSent') === '1';
+    if (emailAlreadySent || smsAlreadySent) {
+      setResendMessage(
+        deliveryMessage({ emailSent: emailAlreadySent, smsSent: smsAlreadySent })
+      );
+      setResendCooldown(30);
+      return;
+    }
+
+    // Only auto-resend when login did not confirm delivery (e.g. TOTP-first path).
     const autoKey = `otpAutoResent:${stored}`;
     if (resolvedMode === 'email' && !sessionStorage.getItem(autoKey)) {
       sessionStorage.setItem(autoKey, '1');
       void (async () => {
         try {
-          await api.post('/auth/resend-otp', { email: stored });
-          setResendMessage('A new code has been sent. Check your inbox and spam folder.');
+          const { data } = await api.post('/auth/resend-otp', { email: stored });
+          setResendMessage(deliveryMessage(data?.data as OtpDelivery));
           setResendCooldown(30);
         } catch (err) {
           console.error('Auto OTP resend failed', err);
+          setError(err instanceof Error ? err.message : 'Could not send verification code');
         }
       })();
     }
@@ -82,6 +107,8 @@ export default function VerifyOtpPage() {
       sessionStorage.removeItem('otpEmail');
       sessionStorage.removeItem('otpRole');
       sessionStorage.removeItem('mfaMode');
+      sessionStorage.removeItem('otpEmailSent');
+      sessionStorage.removeItem('otpSmsSent');
       navigate(user.role ? routes[user.role] ?? '/' : '/');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Verification failed';
@@ -145,8 +172,11 @@ export default function VerifyOtpPage() {
     setResendMessage('');
     setError('');
     try {
-      await api.post('/auth/resend-otp', { email });
-      setResendMessage('A new code has been sent. Check your inbox and spam folder.');
+      const { data } = await api.post('/auth/resend-otp', { email });
+      const delivery = data?.data as OtpDelivery;
+      sessionStorage.setItem('otpEmailSent', delivery?.emailSent ? '1' : '0');
+      sessionStorage.setItem('otpSmsSent', delivery?.smsSent ? '1' : '0');
+      setResendMessage(deliveryMessage(delivery));
       setResendCooldown(30);
       setOtp(['', '', '', '', '', '']);
       inputs.current[0]?.focus();
