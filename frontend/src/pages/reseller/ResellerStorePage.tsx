@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import FormAlert from '@/components/ui/FormAlert';
 import { formatCurrency } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Copy, ExternalLink, Lock, Store, Tag } from 'lucide-react';
 import { runValidators, v } from '@/lib/form-validation';
 import { computeResellerProfit } from '@/lib/reseller-profit';

@@ -14,7 +14,7 @@ import {
   panelTableTh,
   panelTableRowClass,
 } from '@/components/ui/PanelTable';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Loader2, RefreshCw, ShoppingCart, LineChart, Search } from 'lucide-react';
 import OrderStatusFilters from '@/components/orders/OrderStatusFilters';
 import OrderTrackingModal from '@/components/orders/OrderTrackingModal';

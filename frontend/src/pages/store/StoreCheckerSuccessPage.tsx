@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import StoreLayout, { StoreTab } from '@/components/store/StoreLayout';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { buildStoreHomePath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
 import { CheckCircle, Copy } from 'lucide-react';
 

@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { cn, formatCurrency } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { runValidators, v } from '@/lib/form-validation';
 import { CheckCircle } from 'lucide-react';
 

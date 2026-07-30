@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Textarea from '@/components/ui/Textarea';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Copy, Check, BookOpen, Key, Shield, Clock, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

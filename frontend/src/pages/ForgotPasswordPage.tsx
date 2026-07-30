@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button';
 import FormAlert from '@/components/ui/FormAlert';
 import { runValidators, v } from '@/lib/form-validation';
 import AuthLayout from '@/components/layout/AuthLayout';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');

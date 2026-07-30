@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { formatCurrency, cn } from '@/lib/utils';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { getNetworkImage } from '@/lib/network-images';
 import { computeResellerProfit } from '@/lib/reseller-profit';

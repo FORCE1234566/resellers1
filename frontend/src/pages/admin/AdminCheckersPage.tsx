@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Loader2, Upload } from 'lucide-react';
 import {
   PanelTable,

@@ -10,7 +10,7 @@ import FormAlert from '@/components/ui/FormAlert';
 import { validatePasswordPolicy } from '@/lib/password-strength';
 import { runValidators, v } from '@/lib/form-validation';
 import { formatCurrency } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import ActionChip from '@/components/admin/ActionChip';
 import AdminRewardModal from '@/components/admin/AdminRewardModal';
 import AdminPasswordConfirm from '@/components/admin/AdminPasswordConfirm';

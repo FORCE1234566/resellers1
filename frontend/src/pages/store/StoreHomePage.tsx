@@ -8,7 +8,7 @@ import { ChevronDown } from 'lucide-react';
 import StoreContactLinks from '@/components/store/StoreContactLinks';
 import { FeatureCard, ServiceCard, InfoCard } from '@/components/ui/ModernCard';
 import { getNetworkImage } from '@/lib/network-images';
-import { useParams, Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
+import { useParams, Link, useLocation, useSearchParams, useNavigate } from 'react-router';
 import { buildStoreBuyPath, buildStoreHomePath, buildStoreAfaPath, buildStoreCheckerPath, buildStoreBecomeResellerPath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
 import { fetchStore } from '@/lib/store-api';
 

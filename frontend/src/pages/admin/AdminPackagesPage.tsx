@@ -15,7 +15,7 @@ import {
 import Button from '@/components/ui/Button';
 import { cn, formatCurrency } from '@/lib/utils';
 import { computeResellerProfit, formatProfitRange } from '@/lib/reseller-profit';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Loader2, Plus, RefreshCw, Save } from 'lucide-react';
 import NetworkStockBar, { NetworkStockRow } from '@/components/network/NetworkStockBar';
 import AdminAddPackageModal from '@/components/admin/AdminAddPackageModal';

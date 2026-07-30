@@ -9,7 +9,7 @@ import Textarea from '@/components/ui/Textarea';
 import FormAlert from '@/components/ui/FormAlert';
 import NetworkStockBar, { NetworkStockRow } from '@/components/network/NetworkStockBar';
 import { formatCurrency } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 export default function AgentBulkPage() {
   const { user, loading } = useAuth();

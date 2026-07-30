@@ -1,4 +1,4 @@
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 import SupportLine from '@/components/ui/SupportLine';
 import { readStoreRef } from '@/lib/reseller-store-ref';
 

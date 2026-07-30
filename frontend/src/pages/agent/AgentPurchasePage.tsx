@@ -8,7 +8,7 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import NetworkStockBar, { NetworkStockRow } from '@/components/network/NetworkStockBar';
 import { formatCurrency } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   networkPhoneHint,
   networkPhonePlaceholder,

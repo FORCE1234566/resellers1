@@ -4,7 +4,7 @@ import StoreLayout from '@/components/store/StoreLayout';
 import { Card } from '@/components/ui/Card';
 import { ShieldCheck } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { StoreTab } from '@/components/store/StoreLayout';
 import { normalizeStoreSlug } from '@/lib/reseller-store-ref';
 

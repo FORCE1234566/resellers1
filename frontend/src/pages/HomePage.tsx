@@ -3,7 +3,7 @@ import { CheckCircle2, Smartphone } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { FeatureCard, ServiceCard } from '@/components/ui/ModernCard';
 import { getNetworkImage } from '@/lib/network-images';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import SiteNavbar from '@/components/layout/SiteNavbar';
 import { BrandMark } from '@/components/ui/BrandLogo';
 import { PLATFORM_FOOTER, PLATFORM_NAME } from '@/lib/brand';

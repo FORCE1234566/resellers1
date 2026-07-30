@@ -25,7 +25,7 @@ import {
   Trophy,
 } from 'lucide-react';
 
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import DashboardInsights from '@/components/dashboard/DashboardInsights';
 import { GrowthPoint } from '@/components/dashboard/GrowthAreaChart';
 import { Settings } from 'lucide-react';

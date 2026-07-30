@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { formatCurrency } from '@/lib/utils';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { redirectToPaystack } from '@/lib/paystack';
 import { Loader2, Wallet, Settings, RefreshCw, PlugZap, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';

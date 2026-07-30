@@ -9,7 +9,7 @@ import PasswordInput from '@/components/ui/PasswordInput';
 import { validatePasswordPolicy } from '@/lib/password-strength';
 import FormAlert from '@/components/ui/FormAlert';
 import { runValidators, v } from '@/lib/form-validation';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import AdminRewardModal from '@/components/admin/AdminRewardModal';
 import AdminAgentTopUpModal from '@/components/admin/AdminAgentTopUpModal';
 import AdminAgentCustomPricesModal from '@/components/admin/AdminAgentCustomPricesModal';

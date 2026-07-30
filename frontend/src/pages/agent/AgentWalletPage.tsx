@@ -14,7 +14,7 @@ import Input from '@/components/ui/Input';
 
 import { formatCurrency } from '@/lib/utils';
 
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { redirectToPaystack } from '@/lib/paystack';
 

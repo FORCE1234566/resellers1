@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { DollarSign, TrendingUp, Wallet, AlertTriangle } from 'lucide-react';
 import { StatCard } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';

@@ -1,5 +1,5 @@
 import { DarkCard } from '@/components/ui/Card';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 type AlertItem = {
   title: string;

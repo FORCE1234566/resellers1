@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button';
 import FormAlert from '@/components/ui/FormAlert';
 import { validateLoginFields } from '@/lib/form-validation';
 import AuthLayout from '@/components/layout/AuthLayout';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { dashboardRouteForRole } from '@/lib/dashboard-routes';
 import DevLoginHint from '@/components/ui/DevLoginHint';
 

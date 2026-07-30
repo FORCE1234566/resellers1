@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import BrandLogo from '@/components/ui/BrandLogo';
 import BackHomeLink from '@/components/ui/BackHomeLink';
 

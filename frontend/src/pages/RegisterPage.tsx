@@ -20,7 +20,7 @@ import { validateRegisterFields } from '@/lib/form-validation';
 
 import AuthLayout from '@/components/layout/AuthLayout';
 
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 
 
 

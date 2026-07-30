@@ -1,4 +1,4 @@
-import { Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useParams, useSearchParams } from 'react-router';
 import { buildStoreBuyPath, buildStoreHomePath, readStoreRef } from '@/lib/reseller-store-ref';
 
 /** Legacy /?r=slug → /store/slug */

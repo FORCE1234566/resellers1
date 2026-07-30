@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router';
 import { HelpCircle, MessageCircle, Send, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { readStoreRef } from '@/lib/reseller-store-ref';

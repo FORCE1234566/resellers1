@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router';
 import { api, setAuthToken, setStoredUser } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { dashboardRouteForRole } from '@/lib/dashboard-routes';

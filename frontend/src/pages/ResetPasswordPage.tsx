@@ -6,7 +6,7 @@ import Button from '@/components/ui/Button';
 import FormAlert from '@/components/ui/FormAlert';
 import { runValidators, v } from '@/lib/form-validation';
 import AuthLayout from '@/components/layout/AuthLayout';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();

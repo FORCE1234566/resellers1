@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import DashboardLayout from '@/components/layout/DashboardLayout';

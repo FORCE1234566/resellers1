@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { Card } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router';
 import { buildStoreHomePath, buildStoreCheckerSuccessPath } from '@/lib/reseller-store-ref';
 
 type Fulfillment =
