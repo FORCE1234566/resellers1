@@ -27,6 +27,14 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
       existing.costPrice = CHECKER_DEFAULT_BASE_PRICE;
       changed = true;
     }
+    if (existing.agentPrice !== CHECKER_DEFAULT_BASE_PRICE) {
+      existing.agentPrice = CHECKER_DEFAULT_BASE_PRICE;
+      changed = true;
+    }
+    if (existing.resellerBasePrice !== CHECKER_DEFAULT_BASE_PRICE) {
+      existing.resellerBasePrice = CHECKER_DEFAULT_BASE_PRICE;
+      changed = true;
+    }
     if (changed) await existing.save();
     return;
   }
@@ -34,9 +42,9 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
   const legacy = await Package.findOne({ network: 'MTN', bundleSize, productType: { $ne: 'checker' } });
   if (legacy) {
     legacy.productType = 'checker';
-    if (legacy.costPrice !== CHECKER_DEFAULT_BASE_PRICE) {
-      legacy.costPrice = CHECKER_DEFAULT_BASE_PRICE;
-    }
+    legacy.costPrice = CHECKER_DEFAULT_BASE_PRICE;
+    legacy.agentPrice = CHECKER_DEFAULT_BASE_PRICE;
+    legacy.resellerBasePrice = CHECKER_DEFAULT_BASE_PRICE;
     await legacy.save();
     return;
   }
