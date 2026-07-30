@@ -5,7 +5,10 @@ export const CHECKER_TYPES: CheckerType[] = ['bece', 'wassce'];
 export const CHECKER_BUNDLE_BECE = 'BECE';
 export const CHECKER_BUNDLE_WASSCE = 'WASSCE';
 
-export const CHECKER_DEFAULT_BASE_PRICE = 18;
+/** Platform API / inventory cost for BECE & WASSCE checkers. */
+export const CHECKER_API_COST_PRICE = 15.5;
+/** Agent buy price and reseller store base price. */
+export const CHECKER_DEFAULT_BASE_PRICE = 18.5;
 export const CHECKER_DEFAULT_MAX_SELL = 30;
 export const CHECKER_DEFAULT_IMAGE = '/images/waec-checker.png';
 

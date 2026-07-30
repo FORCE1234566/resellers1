@@ -1,5 +1,6 @@
 import { Package } from '../models/Package';
 import {
+  CHECKER_API_COST_PRICE,
   CHECKER_BUNDLE_BECE,
   CHECKER_BUNDLE_WASSCE,
   CHECKER_DEFAULT_BASE_PRICE,
@@ -23,8 +24,8 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
       existing.isEnabled = true;
       changed = true;
     }
-    if (existing.costPrice !== CHECKER_DEFAULT_BASE_PRICE) {
-      existing.costPrice = CHECKER_DEFAULT_BASE_PRICE;
+    if (existing.costPrice !== CHECKER_API_COST_PRICE) {
+      existing.costPrice = CHECKER_API_COST_PRICE;
       changed = true;
     }
     if (existing.agentPrice !== CHECKER_DEFAULT_BASE_PRICE) {
@@ -35,6 +36,10 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
       existing.resellerBasePrice = CHECKER_DEFAULT_BASE_PRICE;
       changed = true;
     }
+    if (existing.maxSellingPrice !== CHECKER_DEFAULT_MAX_SELL) {
+      existing.maxSellingPrice = CHECKER_DEFAULT_MAX_SELL;
+      changed = true;
+    }
     if (changed) await existing.save();
     return;
   }
@@ -42,9 +47,10 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
   const legacy = await Package.findOne({ network: 'MTN', bundleSize, productType: { $ne: 'checker' } });
   if (legacy) {
     legacy.productType = 'checker';
-    legacy.costPrice = CHECKER_DEFAULT_BASE_PRICE;
+    legacy.costPrice = CHECKER_API_COST_PRICE;
     legacy.agentPrice = CHECKER_DEFAULT_BASE_PRICE;
     legacy.resellerBasePrice = CHECKER_DEFAULT_BASE_PRICE;
+    legacy.maxSellingPrice = CHECKER_DEFAULT_MAX_SELL;
     await legacy.save();
     return;
   }
@@ -55,7 +61,7 @@ async function ensureCheckerPackageForType(type: CheckerType): Promise<void> {
       network: 'MTN',
       productType: 'checker',
       bundleSize,
-      costPrice: CHECKER_DEFAULT_BASE_PRICE,
+      costPrice: CHECKER_API_COST_PRICE,
       agentPrice: CHECKER_DEFAULT_BASE_PRICE,
       resellerBasePrice: CHECKER_DEFAULT_BASE_PRICE,
       maxSellingPrice: CHECKER_DEFAULT_MAX_SELL,
