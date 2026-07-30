@@ -11,6 +11,30 @@ import { sendCheckerDeliveryEmail } from '../utils/email';
 import { sendCheckerSms } from './smsService';
 import { sessionOpts, withMongoTransaction } from '../utils/mongoTransaction';
 
+export type CheckerDeliveryResult = {
+  emailSent: boolean;
+  smsSent: boolean;
+};
+
+async function withRetry<T>(label: string, fn: () => Promise<T>, attempts = 2): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[${label} attempt ${i + 1}/${attempts}]`,
+        err instanceof Error ? err.message : err
+      );
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 export async function assignCheckerToOrder(
   order: IOrder
 ): Promise<{ serial: string; pin: string; type: 'bece' | 'wassce' }> {
@@ -49,10 +73,7 @@ export async function assignCheckerToOrder(
     );
 
     if (!checker) {
-      throw new AppError(
-        `${checkerTypeLabel(type)} checkers are out of stock.`,
-        503
-      );
+      throw new AppError(`${checkerTypeLabel(type)} checkers are out of stock.`, 503);
     }
 
     order.checkerDetails = {
@@ -82,43 +103,90 @@ export async function assignCheckerToOrder(
   return assigned;
 }
 
+/**
+ * Send serial+PIN straight to the buying customer (email + SMS).
+ * Retries each channel; succeeds if at least one channel delivers.
+ */
 export async function deliverCheckerNotifications(
   order: IOrder,
   checker: { type: 'bece' | 'wassce'; serial: string; pin: string }
-): Promise<void> {
+): Promise<CheckerDeliveryResult> {
   const label = checkerTypeLabel(checker.type);
-  const tasks: Promise<void>[] = [];
+  const email = String(order.customerEmail || '')
+    .trim()
+    .toLowerCase();
+  const phone = String(order.recipientPhone || '').trim();
 
-  if (order.customerEmail) {
-    tasks.push(
-      sendCheckerDeliveryEmail(order.customerEmail, {
-        type: label,
-        serial: checker.serial,
-        pin: checker.pin,
-        orderId: order.orderId,
-      }).catch((err) => {
-        console.error('[Checker email failed]', err);
-      })
+  if (!email && !phone) {
+    throw new AppError('Customer email or phone is required to deliver the checker', 400);
+  }
+
+  const result: CheckerDeliveryResult = { emailSent: false, smsSent: false };
+  const errors: string[] = [];
+
+  if (email) {
+    try {
+      await withRetry('Checker email', () =>
+        sendCheckerDeliveryEmail(email, {
+          type: label,
+          serial: checker.serial,
+          pin: checker.pin,
+          orderId: order.orderId,
+        })
+      );
+      result.emailSent = true;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Email failed');
+      console.error('[Checker email failed]', order.orderId, email, err);
+    }
+  }
+
+  if (phone) {
+    try {
+      await withRetry('Checker SMS', () =>
+        sendCheckerSms(phone, {
+          type: label,
+          serial: checker.serial,
+          pin: checker.pin,
+        })
+      );
+      result.smsSent = true;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'SMS failed');
+      console.error('[Checker SMS failed]', order.orderId, phone, err);
+    }
+  }
+
+  if (!result.emailSent && !result.smsSent) {
+    throw new AppError(
+      `Checker assigned but delivery failed (${errors.join('; ') || 'no channel'}). Serial is reserved — contact support.`,
+      502
     );
   }
 
-  if (order.recipientPhone) {
-    tasks.push(
-      sendCheckerSms(order.recipientPhone, {
-        type: label,
-        serial: checker.serial,
-        pin: checker.pin,
-      }).catch((err) => {
-        console.error('[Checker SMS failed]', err);
-      })
-    );
+  const channels = [
+    result.emailSent ? `email (${email})` : null,
+    result.smsSent ? `SMS (${phone})` : null,
+  ]
+    .filter(Boolean)
+    .join(' + ');
+
+  await applyOrderStatusUpdate(order, {
+    status: 'delivered',
+    providerStatus: 'delivered',
+    stepLabel: 'Checker Delivered',
+    stepMessage: `${label} serial sent to customer via ${channels}`,
+  });
+
+  if (errors.length) {
+    console.warn('[Checker partial delivery]', order.orderId, result, errors.join(' | '));
   }
 
-  await Promise.all(tasks);
+  return result;
 }
 
 export async function fulfillCheckerOrder(order: IOrder) {
   const checker = await assignCheckerToOrder(order);
-  await deliverCheckerNotifications(order, checker);
-  return { order, checker };
+  const delivery = await deliverCheckerNotifications(order, checker);
+  return { order, checker, delivery };
 }

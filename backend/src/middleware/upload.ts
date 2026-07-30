@@ -72,10 +72,10 @@ export const uploadSpreadsheet = multer({
       cb(new Error('Legacy .xls is not supported. Save as .xlsx or .csv and try again.'));
       return;
     }
-    if (allowed.includes(file.mimetype) || ['.xlsx', '.csv'].includes(ext)) {
+    if (allowed.includes(file.mimetype) || ['.xlsx', '.csv', '.txt'].includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only Excel (.xlsx) or CSV files are allowed'));
+      cb(new Error('Only Excel (.xlsx), CSV, or TXT files are allowed'));
     }
   },
 });

@@ -381,11 +381,11 @@ export const createOrder = async (input: CreateOrderInput) => {
   }
 
   if (isChecker) {
+    let checker: { serial: string; pin: string; type: 'bece' | 'wassce' };
     try {
-      const checker = await assignCheckerToOrder(order);
-      await deliverCheckerNotifications(order, checker);
+      checker = await assignCheckerToOrder(order);
     } catch (err) {
-      console.error('Checker fulfillment failed:', err);
+      console.error('Checker assignment failed:', err);
       if (needsWalletDebit && input.agentId) {
         try {
           await creditWallet(
@@ -446,6 +446,22 @@ export const createOrder = async (input: CreateOrderInput) => {
         });
       }
       throw err;
+    }
+
+    // Pin is reserved — never refund if notification fails; customer can still open success page / agent receipt.
+    try {
+      await deliverCheckerNotifications(order, checker);
+    } catch (err) {
+      console.error('Checker customer notification failed:', order.orderId, err);
+      await applyOrderStatusUpdate(order, {
+        status: 'delivered',
+        providerStatus: 'delivered',
+        stepLabel: 'Checker Delivered',
+        stepMessage:
+          err instanceof AppError
+            ? err.message
+            : 'Checker assigned. Email/SMS delivery had an issue — codes are on the order.',
+      });
     }
   } else if (env.fulfillment.enabled || env.datamax.enabled) {
     await submitOrderToProvider(order);

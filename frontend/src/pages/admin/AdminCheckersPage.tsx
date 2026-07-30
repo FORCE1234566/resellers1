@@ -285,12 +285,12 @@ export default function AdminCheckersPage() {
           </div>
           <p className="text-xs text-gray-500">
             Row 1 must include <strong>Serial</strong> and <strong>PIN</strong> column headers.
-            Data starts on row 2. Use <strong>.xlsx</strong> or <strong>.csv</strong> — format both
-            columns as Text in Excel so long serials are not corrupted.
+            Data starts on row 2. Use <strong>.xlsx</strong>, <strong>.csv</strong>, or pipe-separated
+            <strong> SERIAL|PIN</strong> text. Format Serial/PIN as Text in Excel.
           </p>
           <input
             type="file"
-            accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
             onChange={(e) => {
               setFile(e.target.files?.[0] || null);
               setUploadError('');

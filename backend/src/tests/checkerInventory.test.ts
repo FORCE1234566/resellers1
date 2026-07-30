@@ -85,6 +85,17 @@ test('parseCheckerExcel converts safe numeric Excel cells to text', async () => 
   assert.equal(rows[0].pin, '998877');
 });
 
+test('parseCheckerExcel reads pipe-delimited SERIAL|PIN', async () => {
+  const buffer = Buffer.from(
+    'SERIAL|PIN\n252100005242|3VQE7D384D76\nSERIAL|PIN\n252100005087|4LSS2E85877C\n',
+    'utf8'
+  );
+  const rows = await parseCheckerExcel(buffer, 'bece.txt');
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0], { serial: '252100005242', pin: '3VQE7D384D76' });
+  assert.deepEqual(rows[1], { serial: '252100005087', pin: '4LSS2E85877C' });
+});
+
 test('maskSerial hides middle digits', () => {
   assert.equal(maskSerial('1234567890'), '12****90');
 });

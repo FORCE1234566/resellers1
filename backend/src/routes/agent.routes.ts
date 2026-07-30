@@ -303,7 +303,8 @@ router.post('/checker/purchase', purchaseLimiter, blockClientPricing, asyncHandl
       type: order.checkerDetails?.type,
       serial: order.checkerDetails?.serial,
       pin: order.checkerDetails?.pin,
-      message: 'Checker delivered successfully.',
+      message:
+        'Checker delivered. Serial and PIN were sent to the customer email and phone SMS.',
     },
   });
 }));

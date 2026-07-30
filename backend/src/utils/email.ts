@@ -372,6 +372,17 @@ export const sendCheckerDeliveryEmail = async (
 ): Promise<void> => {
   const resultsUrl = 'https://ghana.waecdirect.org/';
   const subject = `Your ${input.type} result checker — ${PLATFORM_NAME}`;
+  const text = [
+    `${input.type} Result Checker`,
+    '',
+    `Order: ${input.orderId}`,
+    `Serial: ${input.serial}`,
+    `PIN: ${input.pin}`,
+    '',
+    `Check your results: ${resultsUrl}`,
+    '',
+    'Thank you for your purchase!',
+  ].join('\n');
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:16px;">
       <h2 style="color:#1e40af;margin:0 0 12px;">${input.type} Result Checker</h2>
@@ -387,7 +398,15 @@ export const sendCheckerDeliveryEmail = async (
       <p style="color:#374151;margin:0;">Thank you for your purchase!</p>
     </div>
   `;
-  await sendEmail(email, subject, html);
+
+  try {
+    await sendWithOtpRetry('Checker delivery email', email, () =>
+      dispatchPriorityEmail({ to: email, subject, text, html })
+    );
+  } catch (err) {
+    console.error('[Checker email failed]', email, err instanceof Error ? err.message : err);
+    throw new EmailDeliveryError('Could not email the checker. Please try again in a moment.');
+  }
 };
 
 export const sendMtnNumberVerificationEmail = async (

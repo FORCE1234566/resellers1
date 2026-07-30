@@ -66,13 +66,21 @@ function parseRow(
   return { serial, pin };
 }
 
-/** Minimal CSV parser that respects quoted commas. */
-function parseCsvBuffer(buffer: Buffer): unknown[][] {
+/** Delimited text parser (CSV comma or pipe) that respects quoted cells. */
+function parseDelimitedBuffer(buffer: Buffer): unknown[][] {
   const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length > MAX_SPREADSHEET_ROWS) {
-    throw new AppError(`CSV file exceeds ${MAX_SPREADSHEET_ROWS} rows`);
+    throw new AppError(`File exceeds ${MAX_SPREADSHEET_ROWS} rows`);
   }
+
+  const headerProbe = lines[0] || '';
+  const delimiter =
+    headerProbe.includes('|') && headerProbe.split('|').length >= 2 && !headerProbe.includes(',')
+      ? '|'
+      : headerProbe.split('|').length > headerProbe.split(',').length
+        ? '|'
+        : ',';
 
   return lines.map((line) => {
     const cells: string[] = [];
@@ -89,7 +97,7 @@ function parseCsvBuffer(buffer: Buffer): unknown[][] {
         }
         continue;
       }
-      if (ch === ',' && !inQuotes) {
+      if (ch === delimiter && !inQuotes) {
         cells.push(current.trim());
         current = '';
         continue;
@@ -119,10 +127,10 @@ export async function parseCheckerExcel(
     );
   }
 
-  const isCsv = ext.endsWith('.csv');
+  const isCsv = ext.endsWith('.csv') || ext.endsWith('.txt') || ext.endsWith('.tsv');
   let rawRows: unknown[][];
   try {
-    rawRows = isCsv ? parseCsvBuffer(buffer) : assertRowLimit(await readSheet(buffer));
+    rawRows = isCsv ? parseDelimitedBuffer(buffer) : assertRowLimit(await readSheet(buffer));
   } catch (err) {
     if (err instanceof AppError) throw err;
     const message = err instanceof Error ? err.message : String(err);
@@ -157,10 +165,19 @@ export async function parseCheckerExcel(
     );
   }
 
+  // Skip repeated header rows mid-file (e.g. SERIAL|PIN pasted twice).
   const parsed: Array<{ serial: string; pin: string }> = [];
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
     if (!Array.isArray(row)) continue;
+    const first = normalizeHeader(row[0]);
+    const second = normalizeHeader(row[1]);
+    if (
+      (first === 'serial' || first === 's/n' || first === 'sn') &&
+      (second === 'pin' || second === 'pincode')
+    ) {
+      continue;
+    }
     const item = parseRow(row, serialIdx, pinIdx);
     if (item) parsed.push(item);
   }

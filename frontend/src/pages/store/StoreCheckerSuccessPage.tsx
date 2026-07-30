@@ -96,7 +96,8 @@ export default function StoreCheckerSuccessPage() {
               <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
               <h1 className="text-xl font-bold text-gray-900 mb-1">Payment successful</h1>
               <p className="text-sm text-gray-500 mb-6">
-                Your {result.bundleSize} checker has also been sent to your email and SMS.
+                Your {result.bundleSize} checker was sent straight to your email and phone SMS.
+                You can also copy the codes below.
               </p>
 
               <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 text-left space-y-4">
