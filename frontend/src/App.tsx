@@ -59,8 +59,6 @@ const LegacyStoreBuyRedirect = lazy(() =>
 );
 const VerifyPage = lazy(() => import('@/pages/store/VerifyPage'));
 
-const FloatingWidgets = lazy(() => import('@/components/ui/FloatingWidgets'));
-const SupportAssistant = lazy(() => import('@/components/support/SupportAssistant'));
 const SessionTimeout = lazy(() => import('@/components/auth/SessionTimeout'));
 
 function Lazy({ children }: { children: React.ReactNode }) {
@@ -130,10 +128,6 @@ export default function App() {
         <Route path="/store/:slug/buy/:network" element={<Lazy><StorePurchasePage /></Lazy>} />
         <Route path="/store/:slug/verify" element={<Lazy><VerifyPage /></Lazy>} />
       </Routes>
-      <Suspense fallback={null}>
-        <FloatingWidgets />
-        <SupportAssistant />
-      </Suspense>
     </>
   );
 }
