@@ -1,5 +1,6 @@
 import { PLATFORM_NAME } from '../config/brand';
 import { env } from '../config/env';
+import { WAEC_RESULTS_URL } from '../config/checker';
 import { normalizeGhanaPhone } from '../utils/phone';
 
 export type CheckerSmsPayload = {
@@ -9,7 +10,6 @@ export type CheckerSmsPayload = {
 };
 
 const ARKESEL_SEND_URL = 'https://sms.arkesel.com/api/v2/sms/send';
-const WAEC_RESULTS_URL = 'https://ghana.waecdirect.org/';
 
 export function isSmsConfigured(): boolean {
   return Boolean(process.env.SMS_API_KEY?.trim());

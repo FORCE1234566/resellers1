@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { PLATFORM_NAME } from '../config/brand';
+import { WAEC_RESULTS_URL } from '../config/checker';
 import { AppError } from '../middleware/errorHandler';
 
 function smtpPort(): number {
@@ -370,7 +371,7 @@ export const sendCheckerDeliveryEmail = async (
   email: string,
   input: { type: string; serial: string; pin: string; orderId: string }
 ): Promise<void> => {
-  const resultsUrl = 'https://ghana.waecdirect.org/';
+  const resultsUrl = WAEC_RESULTS_URL;
   const subject = `Your ${input.type} result checker — ${PLATFORM_NAME}`;
   const text = [
     `${input.type} Result Checker`,

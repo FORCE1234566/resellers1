@@ -11,6 +11,8 @@ export const CHECKER_API_COST_PRICE = 15.5;
 export const CHECKER_DEFAULT_BASE_PRICE = 18.5;
 export const CHECKER_DEFAULT_MAX_SELL = 30;
 export const CHECKER_DEFAULT_IMAGE = '/images/waec-checker.png';
+/** Official WAEC Ghana e-results portal linked in checker email/SMS. */
+export const WAEC_RESULTS_URL = 'https://eresults.waecgh.org/';
 
 export function checkerTypeFromBundle(bundleSize: string): CheckerType | null {
   const b = bundleSize.trim().toUpperCase();
