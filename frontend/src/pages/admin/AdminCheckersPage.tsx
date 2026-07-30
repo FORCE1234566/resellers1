@@ -141,7 +141,12 @@ export default function AdminCheckersPage() {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) {
-      setUploadError('Choose an Excel file first');
+      setUploadError('Choose an Excel or CSV file first');
+      return;
+    }
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+      setUploadError('Legacy .xls is not supported. Save as .xlsx or .csv and try again.');
       return;
     }
     setUploading(true);
@@ -151,12 +156,17 @@ export default function AdminCheckersPage() {
       const form = new FormData();
       form.append('file', file);
       form.append('type', uploadType);
-      const res = await api.post('/admin/checkers/upload', form);
+      const res = await api.post('/admin/checkers/upload', form, { timeout: 120_000 });
       const d = res.data.data as { imported: number; skippedDuplicates: number; skippedInvalid: number };
-      setUploadMsg(
-        `Imported ${d.imported}. Skipped duplicates: ${d.skippedDuplicates}. Invalid rows: ${d.skippedInvalid}.` +
-          (d.imported > 0 ? ' Stock marked in stock automatically.' : '')
-      );
+      if (d.imported > 0) {
+        setUploadMsg(
+          `Imported ${d.imported}. Skipped duplicates: ${d.skippedDuplicates}. Invalid rows: ${d.skippedInvalid}. Sales enabled automatically.`
+        );
+      } else {
+        setUploadMsg(
+          `No new rows imported (duplicates: ${d.skippedDuplicates}, invalid: ${d.skippedInvalid}). If stock already exists, click Enable sales.`
+        );
+      }
       setFile(null);
       await load();
     } catch (err) {
@@ -274,11 +284,13 @@ export default function AdminCheckersPage() {
             ))}
           </div>
           <p className="text-xs text-gray-500">
-            Row 1 must include <strong>Serial</strong> and <strong>PIN</strong> column headers. Data starts row 2.
+            Row 1 must include <strong>Serial</strong> and <strong>PIN</strong> column headers.
+            Data starts on row 2. Use <strong>.xlsx</strong> or <strong>.csv</strong> — format both
+            columns as Text in Excel so long serials are not corrupted.
           </p>
           <input
             type="file"
-            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
             onChange={(e) => {
               setFile(e.target.files?.[0] || null);
               setUploadError('');

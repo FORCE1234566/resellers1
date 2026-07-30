@@ -148,3 +148,27 @@ export const verifyTransfer = async (reference: string) => {
   const { data } = await paystackApi.get(`/transfer/verify/${reference}`);
   return data.data;
 };
+
+/** Full or partial refund for a successful Paystack charge (by transaction reference). */
+export const refundTransaction = async (
+  reference: string,
+  amountInPesewas?: number
+): Promise<{ id?: number; status?: string; amount?: number }> => {
+  if (!env.paystack.secretKey) {
+    throw new AppError('Paystack is not configured. Contact support.', 503);
+  }
+  try {
+    const payload: Record<string, unknown> = { transaction: reference };
+    if (typeof amountInPesewas === 'number' && amountInPesewas > 0) {
+      payload.amount = amountInPesewas;
+    }
+    const { data } = await paystackApi.post('/refund', payload);
+    if (!data?.status) {
+      throw new AppError(data?.message || 'Paystack refund failed', 502);
+    }
+    return (data.data || {}) as { id?: number; status?: string; amount?: number };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(paystackFailureMessage(err, 'Paystack refund could not be started'), 502);
+  }
+};

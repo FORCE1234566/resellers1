@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import { AppError } from '../middleware/errorHandler';
 import { checkerTypeFromBundle, checkerTypeLabel } from '../config/checker';
 import { IOrder } from '../models/Order';
@@ -51,7 +50,7 @@ export async function assignCheckerToOrder(
 
     if (!checker) {
       throw new AppError(
-        `${checkerTypeLabel(type)} checkers are out of stock. Payment received — contact support for a refund.`,
+        `${checkerTypeLabel(type)} checkers are out of stock.`,
         503
       );
     }

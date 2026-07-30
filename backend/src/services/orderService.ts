@@ -32,6 +32,7 @@ import { appendAuditLog } from './immutableAuditService';
 import { normalizeGhanaPhone, assertNetworkPhone } from '../utils/phone';
 import { redeemPromoCode } from './promoCodeService';
 import { sendAfaRegistrationAdminEmail } from '../utils/email';
+import { refundTransaction, ghsToPesewas } from '../utils/paystack';
 
 const getSettings = async () => {
   let settings = await Setting.findOne();
@@ -410,6 +411,30 @@ export const createOrder = async (input: CreateOrderInput) => {
             providerStatus: 'failed',
             stepLabel: 'Checker Unavailable',
             stepMessage: err instanceof AppError ? err.message : 'Could not assign checker',
+          });
+        }
+      } else if (input.source === 'reseller_store' && input.paystackReference) {
+        try {
+          await refundTransaction(input.paystackReference, ghsToPesewas(sellingPrice));
+          await applyOrderStatusUpdate(order, {
+            status: 'refunded',
+            providerStatus: 'refunded',
+            stepLabel: 'Checker Refunded',
+            stepMessage:
+              err instanceof AppError
+                ? `${err.message} Paystack refund started.`
+                : 'Could not assign checker — Paystack refund started.',
+          });
+        } catch (refundErr) {
+          console.error('Checker Paystack refund failed:', refundErr);
+          await applyOrderStatusUpdate(order, {
+            status: 'failed',
+            providerStatus: 'failed',
+            stepLabel: 'Checker Unavailable',
+            stepMessage:
+              err instanceof AppError
+                ? `${err.message} Automatic refund failed — contact support.`
+                : 'Could not assign checker. Automatic refund failed — contact support.',
           });
         }
       } else {

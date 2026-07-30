@@ -63,16 +63,19 @@ export const uploadSpreadsheet = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
       'text/csv',
       'application/csv',
       'application/octet-stream',
     ];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(file.mimetype) || ['.xlsx', '.xls', '.csv'].includes(ext)) {
+    if (ext === '.xls') {
+      cb(new Error('Legacy .xls is not supported. Save as .xlsx or .csv and try again.'));
+      return;
+    }
+    if (allowed.includes(file.mimetype) || ['.xlsx', '.csv'].includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only Excel (.xlsx, .xls) or CSV files are allowed'));
+      cb(new Error('Only Excel (.xlsx) or CSV files are allowed'));
     }
   },
 });

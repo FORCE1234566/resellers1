@@ -60,6 +60,31 @@ test('parseCheckerExcel reads CSV uploads', async () => {
   assert.deepEqual(rows[0], { serial: 'ABC123', pin: '999888' });
 });
 
+test('parseCheckerExcel reads CSV with quoted commas', async () => {
+  const buffer = Buffer.from('Serial,PIN\n"AB,C123","99,9888"\n', 'utf8');
+  const rows = await parseCheckerExcel(buffer, 'checkers.csv');
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], { serial: 'AB,C123', pin: '99,9888' });
+});
+
+test('parseCheckerExcel rejects legacy .xls', async () => {
+  await assert.rejects(
+    () => parseCheckerExcel(Buffer.from('x'), 'old.xls'),
+    /xlsx or \.csv/i
+  );
+});
+
+test('parseCheckerExcel converts safe numeric Excel cells to text', async () => {
+  const buffer = await buildTestXlsx([
+    ['Serial', 'PIN'],
+    [1234567890, 998877],
+  ]);
+  const rows = await parseCheckerExcel(buffer, 'checkers.xlsx');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].serial, '1234567890');
+  assert.equal(rows[0].pin, '998877');
+});
+
 test('maskSerial hides middle digits', () => {
   assert.equal(maskSerial('1234567890'), '12****90');
 });
