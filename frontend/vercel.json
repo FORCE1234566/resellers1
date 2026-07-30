@@ -11,7 +11,10 @@
       "source": "/api/(.*)",
       "destination": "https://backend-snowy-eight-68.vercel.app/api/$1"
     },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/((?!sitemap\\.xml$|robots\\.txt$).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
