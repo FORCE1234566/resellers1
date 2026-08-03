@@ -148,13 +148,20 @@ export async function rejectAgentApiAccess(agentId: string, reason?: string): Pr
 /** Auto-approve API for demo/dev agents without a pending request. */
 export async function provisionApprovedAgentApi(agent: IUser): Promise<{ apiKey: string; secretKey: string }> {
   const plaintextSecret = generateSecretKey();
+  const existingCustomPrices = agent.agentApi?.customPrices;
   agent.agentApi = {
     apiKey: generateApiKey(),
-    ipWhitelist: [],
+    ipWhitelist: agent.agentApi?.ipWhitelist ?? [],
     isActive: true,
     approvalStatus: 'approved',
     reviewedAt: new Date(),
-    customPrices: new Map(),
+    // Preserve per-agent package prices when (re)provisioning API credentials.
+    customPrices:
+      existingCustomPrices instanceof Map
+        ? existingCustomPrices
+        : existingCustomPrices
+          ? new Map(Object.entries(existingCustomPrices as unknown as Record<string, number>))
+          : new Map(),
   };
   await setInitialAgentApiSecret(agent.agentApi, plaintextSecret);
   agent.markModified('agentApi');

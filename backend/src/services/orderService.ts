@@ -276,9 +276,11 @@ export const createOrder = async (input: CreateOrderInput) => {
     roundMoney(sellingPrice * ((settings.paystackChargePercent ?? 2) / 100));
   const totalAmount = roundMoney(sellingPrice + processingFee);
 
+  // Agent custom prices must drive admin interest (platform profit), not only the wallet debit.
   const adminBasePrice = getAdminBasePrice(input.source, {
     resellerBasePrice: pkg.resellerBasePrice,
-    agentPrice: pkg.agentPrice,
+    agentPrice:
+      input.source === 'agent' || input.source === 'agent_api' ? sellingPrice : pkg.agentPrice,
   });
 
   const { paystackFee, platformProfit } = await snapshotPlatformProfitForOrder({
@@ -556,14 +558,15 @@ export const validateBulkOrders = async (
       throw new AppError(`Bundle ${bundle} not found for ${network}`);
     }
 
+    const price = await getAgentPrice(agentId, pkg._id, pkg);
     validated.push({
       phone,
       bundleSize: bundle,
       packageId: pkg._id.toString(),
-      price: pkg.agentPrice,
+      price,
       network: pkg.network,
     });
-    totalCost += pkg.agentPrice;
+    totalCost += price;
   }
 
   const wallet = await import('./walletService').then((m) => m.getOrCreateWallet(agentId));
@@ -585,7 +588,11 @@ export const processBulkOrders = async (
     if (!pkg || !pkg.isEnabled) {
       throw new AppError(`Package not found or disabled for ${item.phone}`);
     }
-    priced.push({ phone: item.phone, packageId: item.packageId, price: pkg.agentPrice });
+    const price =
+      item.price != null && Number.isFinite(item.price)
+        ? Number(item.price)
+        : await getAgentPrice(agentId, pkg._id, pkg);
+    priced.push({ phone: item.phone, packageId: item.packageId, price });
   }
 
   const totalCost = roundMoney(priced.reduce((sum, item) => sum + item.price, 0));

@@ -70,6 +70,7 @@ import { migrateFulfillmentSettings, normalizeNetworkRoute, normalizeAfaRoute } 
 import {
   setAgentCustomPrice,
   clearAgentCustomPrices,
+  getStoredAgentCustomPrice,
 } from '../services/agentPricingService';
 import {
   approveAgentApiAccess,
@@ -348,7 +349,7 @@ router.get('/agents/:id/prices', asyncHandler(async (req, res) => {
 
   const packages = sortPackagesByBundleSize(await Package.find({ isEnabled: true }));
   const data = packages.map((pkg) => {
-    const customPrice = agent.agentApi?.customPrices?.get(pkg._id.toString()) ?? null;
+    const customPrice = getStoredAgentCustomPrice(agent, pkg._id) ?? null;
     return {
       _id: pkg._id,
       network: pkg.network,

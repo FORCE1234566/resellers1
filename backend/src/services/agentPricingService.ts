@@ -1,8 +1,43 @@
 import mongoose from 'mongoose';
 import { Package, IPackage } from '../models/Package';
-import { User } from '../models/User';
+import { User, IUser, IAgentApi } from '../models/User';
 import { AppError } from '../middleware/errorHandler';
 import { validatePackagePrices } from './settingsService';
+
+function readCustomPriceMap(
+  prices: Map<string, number> | Record<string, number> | undefined | null,
+  packageId: string
+): number | undefined {
+  if (!prices) return undefined;
+  if (prices instanceof Map) {
+    const value = prices.get(packageId);
+    return value == null ? undefined : Number(value);
+  }
+  const value = (prices as Record<string, number>)[packageId];
+  return value == null ? undefined : Number(value);
+}
+
+export function getStoredAgentCustomPrice(
+  agent: Pick<IUser, 'agentApi'>,
+  packageId: mongoose.Types.ObjectId | string
+): number | undefined {
+  return readCustomPriceMap(agent.agentApi?.customPrices as Map<string, number> | undefined, packageId.toString());
+}
+
+function ensureAgentApiStub(agent: IUser): IAgentApi {
+  if (!agent.agentApi) {
+    agent.agentApi = {
+      ipWhitelist: [],
+      isActive: false,
+      approvalStatus: 'none',
+      customPrices: new Map(),
+    };
+  }
+  if (!agent.agentApi.customPrices) {
+    agent.agentApi.customPrices = new Map();
+  }
+  return agent.agentApi;
+}
 
 export async function getAgentPrice(
   agentId: mongoose.Types.ObjectId | string,
@@ -12,7 +47,7 @@ export async function getAgentPrice(
   const agent = await User.findById(agentId);
   if (!agent?.agentApi?.customPrices) return pkg.agentPrice;
 
-  const customPrice = agent.agentApi.customPrices.get(packageId.toString());
+  const customPrice = getStoredAgentCustomPrice(agent, packageId);
   return customPrice ?? pkg.agentPrice;
 }
 
@@ -43,21 +78,16 @@ export async function setAgentCustomPrice(
   if (!agent) throw new AppError('Agent not found', 404);
   if (!pkg) throw new AppError('Package not found', 404);
 
-  if (!agent.agentApi) {
-    throw new AppError('Agent API profile not found', 400);
-  }
-
-  if (!agent.agentApi.customPrices) {
-    agent.agentApi.customPrices = new Map();
-  }
+  const agentApi = ensureAgentApiStub(agent);
 
   if (price === null) {
-    agent.agentApi.customPrices.delete(packageId);
+    agentApi.customPrices!.delete(packageId);
   } else {
     validateAgentCustomPrice(price, pkg);
-    agent.agentApi.customPrices.set(packageId, price);
+    agentApi.customPrices!.set(packageId, price);
   }
 
+  agent.markModified('agentApi');
   agent.markModified('agentApi.customPrices');
   await agent.save();
 }
@@ -67,7 +97,10 @@ export async function clearAgentCustomPrices(agentId: string): Promise<number> {
   if (!agent) throw new AppError('Agent not found', 404);
   if (!agent.agentApi?.customPrices) return 0;
 
-  const count = agent.agentApi.customPrices.size;
+  const count =
+    agent.agentApi.customPrices instanceof Map
+      ? agent.agentApi.customPrices.size
+      : Object.keys(agent.agentApi.customPrices as unknown as Record<string, number>).length;
   agent.agentApi.customPrices = new Map();
   agent.markModified('agentApi.customPrices');
   await agent.save();
