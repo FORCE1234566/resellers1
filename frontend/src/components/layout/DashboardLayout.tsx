@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Users, Package, ShoppingCart, MessageSquare,
   Wallet, Settings, LogOut, Code, Menu, X, Store,
-  DollarSign, Bell, Phone, Search, Tag,
+  DollarSign, Bell, Phone, Search,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import AdminSearchBar from '@/components/admin/AdminSearchBar';
@@ -18,7 +18,6 @@ const adminLinks = [
   { href: '/admin/agents', label: 'Agents', icon: Users },
   { href: '/admin/resellers', label: 'Resellers', icon: Store },
   { href: '/admin/packages', label: 'Packages', icon: Package },
-  { href: '/admin/promo-codes', label: 'Promo Codes', icon: Tag },
   { href: '/admin/checkers', label: 'Results Checkers', icon: Package },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { href: '/admin/withdrawals', label: 'Withdrawals', icon: Wallet },

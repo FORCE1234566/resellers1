@@ -23,7 +23,6 @@ const AdminResellersPage = lazy(() => import('@/pages/admin/AdminResellersPage')
 const AdminWithdrawalsPage = lazy(() => import('@/pages/admin/AdminWithdrawalsPage'));
 const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage'));
 const AdminCheckersPage = lazy(() => import('@/pages/admin/AdminCheckersPage'));
-const AdminPromoCodesPage = lazy(() => import('@/pages/admin/AdminPromoCodesPage'));
 const AdminSearchPage = lazy(() => import('@/pages/admin/AdminSearchPage'));
 
 const AgentDashboard = lazy(() => import('@/pages/agent/AgentDashboard'));
@@ -88,7 +87,6 @@ export default function App() {
         <Route path="/admin" element={<Lazy><ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute></Lazy>} />
         <Route path="/admin/agents" element={<Lazy><ProtectedRoute role="admin"><AdminAgentsPage /></ProtectedRoute></Lazy>} />
         <Route path="/admin/packages" element={<Lazy><ProtectedRoute role="admin"><AdminPackagesPage /></ProtectedRoute></Lazy>} />
-        <Route path="/admin/promo-codes" element={<Lazy><ProtectedRoute role="admin"><AdminPromoCodesPage /></ProtectedRoute></Lazy>} />
         <Route path="/admin/checkers" element={<Lazy><ProtectedRoute role="admin"><AdminCheckersPage /></ProtectedRoute></Lazy>} />
         <Route path="/admin/search" element={<Lazy><ProtectedRoute role="admin"><AdminSearchPage /></ProtectedRoute></Lazy>} />
         <Route path="/admin/orders" element={<Lazy><ProtectedRoute role="admin"><AdminOrdersPage /></ProtectedRoute></Lazy>} />

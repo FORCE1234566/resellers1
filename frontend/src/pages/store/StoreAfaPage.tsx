@@ -10,8 +10,6 @@ import { redirectToPaystack } from '@/lib/paystack';
 import { formatCurrency } from '@/lib/utils';
 import { buildStoreHomePath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
 import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS, formatGhanaCardInput, isValidGhanaCard } from '@/lib/afa';
-import StorePromoCodeInput, { PromoPreview } from '@/components/store/StorePromoCodeInput';
-
 interface AfaOffer {
   packageId: string;
   price: number;
@@ -42,8 +40,6 @@ export default function StoreAfaPage() {
   const [email, setEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
-  const [promoPreview, setPromoPreview] = useState<PromoPreview | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -85,7 +81,6 @@ export default function StoreAfaPage() {
         fullName: fullName.trim(),
         ghanaCard: ghanaCard.trim().toUpperCase(),
         location: location.trim(),
-        ...(promoCode ? { promoCode } : {}),
       });
       redirectToPaystack(res.data.data.authorizationUrl);
     } catch (err) {
@@ -172,17 +167,6 @@ export default function StoreAfaPage() {
               disabled={!offer?.inStock}
             />
 
-            <StorePromoCodeInput
-              key={offer?.packageId}
-              slug={slug}
-              packageId={offer?.packageId}
-              disabled={!offer?.inStock}
-              onApplied={(code, preview) => {
-                setPromoCode(code);
-                setPromoPreview(preview);
-              }}
-            />
-
             {offerLoading ? (
               <p className="text-sm text-gray-500 text-center py-2">Loading store price…</p>
             ) : (
@@ -191,7 +175,7 @@ export default function StoreAfaPage() {
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
                   <div className="flex justify-between font-semibold text-gray-900">
                     <span>Total to pay</span>
-                    <span>{formatCurrency(promoPreview?.total ?? offer.total ?? offer.price)}</span>
+                    <span>{formatCurrency(offer.total ?? offer.price)}</span>
                   </div>
                 </div>
               )
@@ -206,7 +190,7 @@ export default function StoreAfaPage() {
               {offerLoading
                 ? 'Loading…'
                 : offer?.inStock && offer.price > 0
-                  ? `Pay ${formatCurrency(promoPreview?.total ?? offer.total ?? offer.price)} & Register`
+                  ? `Pay ${formatCurrency(offer.total ?? offer.price)} & Register`
                   : 'Pay & Register'}
             </Button>
           </form>
