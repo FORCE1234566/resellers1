@@ -8,6 +8,7 @@ import { generateOrderId, generateOrderNumber, isValidGhanaPhone, roundMoney } f
 import { toOrderCreationError } from '../utils/mongoErrors';
 import { debitWallet, creditWallet } from './walletService';
 import { applyOrderStatusUpdate, submitOrderToProvider } from './fulfillmentProviderService';
+import { creditOrderResellerProfits } from './resellerOrderProfitService';
 import { snapshotPlatformProfitForOrder } from './platformProfitService';
 import { getAdminBasePrice, computeResellerOrderProfit } from './profitFormulas';
 import { assertNetworkInStock } from './networkStockService';
@@ -380,6 +381,14 @@ export const createOrder = async (input: CreateOrderInput) => {
     }
   } catch (err) {
     throw toOrderCreationError(err);
+  }
+
+  if (order.source === 'reseller_store') {
+    try {
+      await creditOrderResellerProfits(order);
+    } catch (err) {
+      console.error('Immediate reseller profit credit failed:', order.orderId, err);
+    }
   }
 
   if (isChecker) {

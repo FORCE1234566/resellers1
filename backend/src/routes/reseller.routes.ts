@@ -80,19 +80,23 @@ router.get('/dashboard', asyncHandler(async (req: AuthRequest, res) => {
     Order.countDocuments({ resellerId, status: 'pending' }),
     Order.countDocuments({ resellerId, status: 'processing' }),
     Order.aggregate([{ $match: { resellerId } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
-    Order.aggregate([{ $match: { resellerId, createdAt: { $gte: startOfToday } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
-    Order.aggregate([{ $match: { resellerId, createdAt: { $gte: startOfWeek } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
-    Order.aggregate([{ $match: { resellerId, createdAt: { $gte: startOfMonth } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
-    Order.aggregate([{ $match: { resellerId } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
+    Order.aggregate([{ $match: { resellerId, createdAt: { $gte: startOfToday }, status: { $nin: ['failed', 'cancelled', 'refunded'] } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
+    Order.aggregate([{ $match: { resellerId, createdAt: { $gte: startOfWeek }, status: { $nin: ['failed', 'cancelled', 'refunded'] } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
+    Order.aggregate([{ $match: { resellerId, createdAt: { $gte: startOfMonth }, status: { $nin: ['failed', 'cancelled', 'refunded'] } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
+    Order.aggregate([{ $match: { resellerId, status: { $nin: ['failed', 'cancelled', 'refunded'] } } }, { $group: { _id: null, total: { $sum: '$profit' } } }]),
     Order.aggregate([
-      { $match: { 'uplineProfits.resellerId': resellerId } },
+      { $match: { 'uplineProfits.resellerId': resellerId, status: { $nin: ['failed', 'cancelled', 'refunded'] } } },
       { $unwind: '$uplineProfits' },
       { $match: { 'uplineProfits.resellerId': resellerId } },
       { $group: { _id: null, total: { $sum: '$uplineProfits.profit' } } },
     ]),
   ]);
 
-  const growthChart = await getOrderGrowthChart({ resellerId }, 14, 'profit');
+  const growthChart = await getOrderGrowthChart(
+    { resellerId, status: { $nin: ['failed', 'cancelled', 'refunded'] } },
+    14,
+    'profit'
+  );
   const user = await User.findById(resellerId);
   const pricing = user?.resellerStore
     ? await getResellerPricingStatus(user)

@@ -41,8 +41,9 @@ type ProfitScope = {
 };
 
 function profitMatch(scope: ProfitScope = {}, fromDate?: Date) {
+  // Count interest as soon as the order is received; drop only terminal failures.
   const match: Record<string, unknown> = {
-    status: 'delivered',
+    status: { $nin: ['failed', 'cancelled', 'refunded'] },
     ...scope,
   };
   if (scope.agentId) match.agentId = scope.agentId;
@@ -86,5 +87,6 @@ export async function getPlatformProfitTotals(scope: ProfitScope = {}) {
     totalApiCostDeducted: lifetime[0]?.apiCost || 0,
     apiCostToday: today[0]?.apiCost || 0,
     deliveredOrdersToday: today[0]?.orders || 0,
+    ordersCountedToday: today[0]?.orders || 0,
   };
 }

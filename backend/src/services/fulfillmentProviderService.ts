@@ -5,7 +5,10 @@ import { Order, IOrder, OrderStatus, FulfillmentProvider } from '../models/Order
 import { env } from '../config/env';
 import { createNotification } from './notificationService';
 import { notifyagentWebhook } from './agentWebhookService';
-import { creditWallet } from './walletService';
+import {
+  creditOrderResellerProfits,
+  reverseOrderResellerProfits,
+} from './resellerOrderProfitService';
 import { resolveFulfillmentProvider, resolveAfaFulfillmentProvider } from './settingsService';
 import {
   SmartDataHubError,
@@ -241,34 +244,27 @@ async function notifyStatusChange(
   const providerChanged = (order.providerStatus || null) !== (prevProviderStatus || null);
 
   if (statusChanged && order.resellerId && order.status === 'delivered') {
-    if (order.profit > 0) {
-      await creditWallet(
-        order.resellerId,
-        order.profit,
-        'profit_credit',
-        `Profit from order ${order.orderId}`,
-        order.orderId
-      );
-    }
-    if (order.uplineProfits?.length) {
-      for (const entry of order.uplineProfits) {
-        if (entry.profit > 0) {
-          await creditWallet(
-            entry.resellerId,
-            entry.profit,
-            'profit_credit',
-            `Upline profit from order ${order.orderId}`,
-            `${order.orderId}-upline-${entry.resellerId.toString()}`
-          );
-        }
-      }
-    }
+    // Idempotent fallback for orders created before immediate profit credit.
+    await creditOrderResellerProfits(order);
     await createNotification(
       order.resellerId,
       'order_delivered',
       'Order Delivered',
       `Order ${order.orderId} has been delivered successfully.`
     );
+  }
+
+  if (
+    statusChanged &&
+    order.resellerId &&
+    ['failed', 'cancelled', 'refunded'].includes(order.status) &&
+    !['failed', 'cancelled', 'refunded'].includes(prevStatus)
+  ) {
+    try {
+      await reverseOrderResellerProfits(order);
+    } catch (err) {
+      console.error('Failed to reverse reseller profit for', order.orderId, err);
+    }
   }
   if (statusChanged && order.agentId && order.status === 'delivered') {
     await createNotification(

@@ -251,3 +251,80 @@ export const debitProfitBalance = async (
 
   return wallet;
 };
+
+/**
+ * Reverse a prior profit_credit (reduces balance + profitBalance).
+ * Floors at zero so a later withdrawal cannot block order status updates.
+ * Idempotent via (userId, reference, type=adjustment).
+ */
+export const reverseProfitCredit = async (
+  userId: mongoose.Types.ObjectId | string,
+  amount: number,
+  description: string,
+  reference: string
+) => {
+  const roundedAmount = roundMoney(amount);
+  if (roundedAmount <= 0) {
+    throw new AppError('Reverse amount must be positive');
+  }
+
+  const duplicate = await findIdempotentWalletTx(userId, reference, 'adjustment');
+  if (duplicate) {
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) throw new AppError('Wallet not found');
+    return wallet;
+  }
+
+  const slot = await reserveWalletTxSlot(userId, reference, 'adjustment');
+  if (slot === 'duplicate') {
+    const wallet = await Wallet.findOne({ userId });
+    if (!wallet) throw new AppError('Wallet not found');
+    return wallet;
+  }
+
+  await getOrCreateWallet(userId);
+  const walletBefore = await Wallet.findOne({ userId });
+  const balanceBefore = walletBefore?.balance ?? 0;
+
+  const wallet = await Wallet.findOneAndUpdate(
+    { userId },
+    [
+      {
+        $set: {
+          balance: {
+            $max: [0, { $subtract: ['$balance', roundedAmount] }],
+          },
+          profitBalance: {
+            $max: [0, { $subtract: ['$profitBalance', roundedAmount] }],
+          },
+        },
+      },
+    ],
+    { new: true }
+  );
+
+  if (!wallet) {
+    await WalletTransaction.deleteOne({
+      userId,
+      reference,
+      type: 'adjustment',
+      description: '__reserved__',
+    });
+    throw new AppError('Wallet not found');
+  }
+
+  await WalletTransaction.findOneAndUpdate(
+    { userId, reference, type: 'adjustment' },
+    {
+      $set: {
+        amount: -roundedAmount,
+        balanceBefore,
+        balanceAfter: wallet.balance,
+        description,
+        metadata: { kind: 'profit_reverse' },
+      },
+    }
+  );
+
+  return wallet;
+};

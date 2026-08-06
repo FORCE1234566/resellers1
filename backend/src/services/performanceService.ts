@@ -20,7 +20,7 @@ export async function getPerformanceLeaderboard(
   const rows = await Order.aggregate([
     {
       $match: {
-        status: 'delivered',
+        status: { $nin: ['failed', 'cancelled', 'refunded'] },
         createdAt: { $gte: startOfMonth },
         [field]: { $exists: true, $ne: null },
       },
@@ -71,7 +71,7 @@ export async function getUserPerformanceRank(
   const leaderboard = await Order.aggregate([
     {
       $match: {
-        status: 'delivered',
+        status: { $nin: ['failed', 'cancelled', 'refunded'] },
         createdAt: { $gte: startOfMonth },
         [field]: { $exists: true, $ne: null },
       },
