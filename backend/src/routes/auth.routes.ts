@@ -21,7 +21,7 @@ import {
   roleRequiresMfa,
   verifyTotpCode,
 } from '../services/totpService';
-import { sendAuthOtpOrFail, verifyOtp, incrementOtpAttempts } from '../utils/otp';
+import { sendAuthOtpOrFail, verifyOtpOrThrow } from '../utils/otp';
 import { signAccessToken } from '../utils/jwt';
 import { EmailDeliveryError, sendPasswordResetEmail } from '../utils/email';
 import { getCanonicalFrontendUrl } from '../config/urls';
@@ -111,15 +111,15 @@ const isLoginLocked = (user: InstanceType<typeof User>) =>
 async function handleExistingRegistrationEmail(
   existing: InstanceType<typeof User>,
   email: string
-): Promise<'otp_sent' | 'activated'> {
+): Promise<{ type: 'activated' } | { type: 'otp_sent'; delivery: { emailSent: boolean; smsSent: boolean } }> {
   if (existing.status === 'pending') {
     if (await shouldSkipEmailOtpForUser(existing)) {
       activateResellerStore(existing);
       await existing.save();
-      return 'activated';
+      return { type: 'activated' };
     }
-    await sendAuthOtpOrFail(email, { phone: existing.phone });
-    return 'otp_sent';
+    const delivery = await sendAuthOtpOrFail(email, { phone: existing.phone });
+    return { type: 'otp_sent', delivery };
   }
   throw new AppError(
     'An account with this email already exists. Please log in or use Forgot Password.',
@@ -178,7 +178,7 @@ router.post(
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
       const outcome = await handleExistingRegistrationEmail(existing, email);
-      if (outcome === 'activated') {
+      if (outcome.type === 'activated') {
         const result = await issueAuthSession(existing);
         res.status(201).json({
           success: true,
@@ -190,7 +190,12 @@ router.post(
       res.status(201).json({
         success: true,
         message: 'Verification code sent. Please check your email (and spam folder).',
-        data: { email: email.toLowerCase(), requiresOtp: true },
+        data: {
+          email: email.toLowerCase(),
+          requiresOtp: true,
+          otpEmailSent: outcome.delivery.emailSent,
+          otpSmsSent: outcome.delivery.smsSent,
+        },
       });
       return;
     }
@@ -215,12 +220,17 @@ router.post(
       return;
     }
 
-    await sendAuthOtpOrFail(email, { phone });
+    const delivery = await sendAuthOtpOrFail(email, { phone });
 
     res.status(201).json({
       success: true,
       message: 'Registration successful. Please verify OTP sent to your email or phone.',
-      data: { email: user.email, requiresOtp: true },
+      data: {
+        email: user.email,
+        requiresOtp: true,
+        otpEmailSent: delivery.emailSent,
+        otpSmsSent: delivery.smsSent,
+      },
     });
   })
 );
@@ -292,7 +302,7 @@ router.post(
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
       const outcome = await handleExistingRegistrationEmail(existing, email);
-      if (outcome === 'activated') {
+      if (outcome.type === 'activated') {
         const result = await issueAuthSession(existing);
         res.status(201).json({
           success: true,
@@ -304,7 +314,12 @@ router.post(
       res.status(201).json({
         success: true,
         message: 'Verification code sent. Please check your email (and spam folder).',
-        data: { email: email.toLowerCase(), requiresOtp: true },
+        data: {
+          email: email.toLowerCase(),
+          requiresOtp: true,
+          otpEmailSent: outcome.delivery.emailSent,
+          otpSmsSent: outcome.delivery.smsSent,
+        },
       });
       return;
     }
@@ -363,12 +378,17 @@ router.post(
       return;
     }
 
-    await sendAuthOtpOrFail(email, { phone });
+    const delivery = await sendAuthOtpOrFail(email, { phone });
 
     res.status(201).json({
       success: true,
       message: 'Registration successful. Please verify OTP sent to your email or phone.',
-      data: { email: user.email, requiresOtp: true },
+      data: {
+        email: user.email,
+        requiresOtp: true,
+        otpEmailSent: delivery.emailSent,
+        otpSmsSent: delivery.smsSent,
+      },
     });
   })
 );
@@ -521,11 +541,7 @@ router.post(
     if (!email || !otp) throw new AppError('Email and OTP required');
 
     const normalizedEmail = normalizeAuthEmail(email);
-    const valid = await verifyOtp(normalizedEmail, otp);
-    if (!valid) {
-      await incrementOtpAttempts(normalizedEmail);
-      throw new AppError('Invalid or expired OTP');
-    }
+    await verifyOtpOrThrow(normalizedEmail, otp);
 
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) throw new AppError('User not found');

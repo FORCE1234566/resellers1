@@ -92,6 +92,12 @@ export default function RegisterPage() {
 
         sessionStorage.setItem('otpRole', 'reseller');
 
+        sessionStorage.setItem('otpEmailSent', result.otpEmailSent ? '1' : '1');
+
+        sessionStorage.setItem('otpSmsSent', result.otpSmsSent ? '1' : '0');
+
+        sessionStorage.removeItem(`otpAutoResent:${form.email}`);
+
         navigate('/verify-otp');
 
       } else if (result.token && result.user) {

@@ -63,28 +63,16 @@ export default function VerifyOtpPage() {
 
     const emailAlreadySent = sessionStorage.getItem('otpEmailSent') === '1';
     const smsAlreadySent = sessionStorage.getItem('otpSmsSent') === '1';
-    if (emailAlreadySent || smsAlreadySent) {
+    // Never auto-resend — a second code invalidates the one already in the user's inbox/SMS.
+    if (resolvedMode === 'email') {
       setResendMessage(
-        deliveryMessage({ emailSent: emailAlreadySent, smsSent: smsAlreadySent })
+        deliveryMessage(
+          emailAlreadySent || smsAlreadySent
+            ? { emailSent: emailAlreadySent, smsSent: smsAlreadySent }
+            : { emailSent: true }
+        ).replace('A new code has been sent', 'A verification code was sent')
       );
       setResendCooldown(30);
-      return;
-    }
-
-    // Only auto-resend when login did not confirm delivery (e.g. TOTP-first path).
-    const autoKey = `otpAutoResent:${stored}`;
-    if (resolvedMode === 'email' && !sessionStorage.getItem(autoKey)) {
-      sessionStorage.setItem(autoKey, '1');
-      void (async () => {
-        try {
-          const { data } = await api.post('/auth/resend-otp', { email: stored });
-          setResendMessage(deliveryMessage(data?.data as OtpDelivery));
-          setResendCooldown(30);
-        } catch (err) {
-          console.error('Auto OTP resend failed', err);
-          setError(err instanceof Error ? err.message : 'Could not send verification code');
-        }
-      })();
     }
   }, [navigate, redirectToLogin]);
 
@@ -176,7 +164,9 @@ export default function VerifyOtpPage() {
       const delivery = data?.data as OtpDelivery;
       sessionStorage.setItem('otpEmailSent', delivery?.emailSent ? '1' : '0');
       sessionStorage.setItem('otpSmsSent', delivery?.smsSent ? '1' : '0');
-      setResendMessage(deliveryMessage(delivery));
+      setResendMessage(
+        `${deliveryMessage(delivery)} Previous codes no longer work — use only this latest code.`
+      );
       setResendCooldown(30);
       setOtp(['', '', '', '', '', '']);
       inputs.current[0]?.focus();
@@ -252,6 +242,18 @@ export default function VerifyOtpPage() {
                 sessionStorage.setItem('mfaMode', 'email');
                 setMfaMode('email');
                 setOtp(['', '', '', '', '', '']);
+                const emailAlreadySent = sessionStorage.getItem('otpEmailSent') === '1';
+                const smsAlreadySent = sessionStorage.getItem('otpSmsSent') === '1';
+                if (emailAlreadySent || smsAlreadySent) {
+                  setResendMessage(
+                    deliveryMessage({ emailSent: emailAlreadySent, smsSent: smsAlreadySent }).replace(
+                      'A new code has been sent',
+                      'Use the verification code already sent'
+                    )
+                  );
+                  setResendCooldown(30);
+                  return;
+                }
                 void resendOtp();
               }}
               disabled={loading || resending}
