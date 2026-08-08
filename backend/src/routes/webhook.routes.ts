@@ -5,6 +5,7 @@ import { webhookLimiter, webhookVerifyLimiter } from '../middleware/rateLimiter'
 import { paystackIpAllowlist } from '../middleware/paystackIpAllowlist';
 import {
   handleFulfillmentWebhookRoute,
+  handleFulfillmentWebhookHealth,
   handlePaystackWebhook,
   handlePaymentVerify,
 } from './webhook.handlers';
@@ -16,6 +17,9 @@ router.get(
   webhookVerifyLimiter,
   asyncHandler(handlePaymentVerify)
 );
+
+router.get('/fulfillment', asyncHandler(handleFulfillmentWebhookHealth));
+router.get('/smartdatahub', asyncHandler(handleFulfillmentWebhookHealth));
 
 export const paystackWebhookMiddleware = [
   paystackIpAllowlist,

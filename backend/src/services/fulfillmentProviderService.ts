@@ -1075,12 +1075,28 @@ export async function syncInFlightOrders(orders: IOrder[]) {
 
 export function verifyFulfillmentWebhookSignature(payload: string, signature: string): boolean {
   if (!env.fulfillment.webhookSecret) return true;
-  const provided = signature.trim().replace(/^sha256=/i, '');
-  const hash = crypto
-    .createHmac('sha256', env.fulfillment.webhookSecret)
-    .update(payload)
-    .digest('hex');
-  return secureCompare(hash, provided);
+
+  const secret = env.fulfillment.webhookSecret.trim();
+  const providedRaw = signature.trim();
+  const provided = providedRaw
+    .replace(/^sha256=/i, '')
+    .replace(/^Bearer\s+/i, '')
+    .trim();
+
+  // Some providers send the shared secret directly (Bearer / plain header).
+  if (secureCompare(provided, secret) || secureCompare(providedRaw, secret)) {
+    return true;
+  }
+
+  const hash = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  if (secureCompare(hash, provided)) return true;
+
+  // Also try hex digest of secret||payload variants used by some gateways.
+  const hashSecretFirst = crypto
+    .createHmac('sha256', secret)
+    .update(payload, 'utf8')
+    .digest('base64');
+  return secureCompare(hashSecretFirst, provided);
 }
 
 function unwrapWebhookBody(body: Record<string, unknown>): Record<string, unknown> {

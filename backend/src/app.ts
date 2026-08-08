@@ -95,6 +95,7 @@ app.use(
 // Webhook signature verification requires the raw request body (before JSON parsing).
 app.post('/api/webhooks/paystack', ...paystackWebhookMiddleware);
 app.post('/api/webhooks/fulfillment', ...fulfillmentWebhookMiddleware);
+app.post('/api/webhooks/smartdatahub', ...fulfillmentWebhookMiddleware);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
