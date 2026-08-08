@@ -405,15 +405,15 @@ async function submitToDatamaxAfa(order: IOrder): Promise<IOrder | null> {
           : order.orderId;
 
     return applyOrderStatusUpdate(order, {
-      status: 'processing',
-      providerStatus: 'afa_submitted',
+      status: 'delivered',
+      providerStatus: 'delivered',
       fulfillmentProvider: 'datamax',
       providerOrderId,
       providerReference: order.orderId,
-      stepLabel: 'Registration Submitted',
+      stepLabel: 'Registration Delivered',
       stepMessage:
         response.message ||
-        `Submitted for processing — allow ${AFA_PROCESSING_HOURS} hours, then dial ${AFA_CHECK_USSD} to check`,
+        `AFA submitted to network — allow ${AFA_PROCESSING_HOURS} hours, then dial ${AFA_CHECK_USSD} to check status.`,
     });
   } catch (err) {
     if (err instanceof DatamaxError && isProviderBalanceError(err)) {
@@ -453,15 +453,15 @@ async function submitToDatamax(order: IOrder): Promise<IOrder | null> {
 
     const providerOrderId = response.order_id != null ? String(response.order_id) : undefined;
     return applyOrderStatusUpdate(order, {
-      status: 'processing',
-      providerStatus: 'gateway_processing',
+      status: 'delivered',
+      providerStatus: 'delivered',
       fulfillmentProvider: 'datamax',
       providerOrderId,
       providerReference: order.orderId,
-      stepLabel: 'Gateway Processing',
+      stepLabel: 'Bundle Delivered',
       stepMessage: response.message
         ? clientStepMessage(response.message)
-        : 'Order submitted for processing',
+        : 'Order submitted to network and marked delivered',
     });
   } catch (err) {
     if (err instanceof DatamaxError && isProviderBalanceError(err)) {
@@ -706,7 +706,7 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
     const resolvedBase = resolveSyncedProviderStatus(order, rawStatus);
     let resolved = resolvedBase;
 
-    // Exported → email immediately. Plain pending → email only after 1 hour.
+    // Exported → notify immediately. Plain pending → only after 3 hours in Ghana daytime (7am–9pm).
     if (isExportedStatus(rawStatus)) {
       await applySmartDataHubVerificationOnExported(order);
     } else if (isPlainPendingStatus(rawStatus)) {
@@ -729,7 +729,7 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
           providerStatus: SUBMITTED_FOR_VERIFICATION,
           stepLabel: 'Submitted for Verification',
           stepMessage:
-            'Number still pending after 1 hour — submitted for MTN verification (24–144 hours).',
+            'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). SMS sent to the recipient.',
         };
       }
     }
@@ -960,8 +960,8 @@ export async function autoDeliverAgedVerificationOrders(limit = 100): Promise<nu
 }
 
 /**
- * MTN orders stuck on Smart Data Hub "pending" for ≥ 1 hour get the verification email
- * (and move into submitted_for_verification). Earlier pending time does not email.
+ * MTN orders stuck on Smart Data Hub "pending" for ≥ 3 hours during Ghana daytime (7am–9pm)
+ * are marked submitted for verification; buyer gets email + SMS. Overnight pending is left alone.
  */
 export async function sendVerificationEmailsForAgedPendingOrders(limit = 50): Promise<number> {
   const candidates = await Order.find({
@@ -983,7 +983,7 @@ export async function sendVerificationEmailsForAgedPendingOrders(limit = 50): Pr
       providerStatus: SUBMITTED_FOR_VERIFICATION,
       stepLabel: 'Submitted for Verification',
       stepMessage:
-        'Number still pending after 1 hour — submitted for MTN verification (24–144 hours).',
+        'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). SMS sent to the recipient.',
     });
     emailed++;
     if (emailed >= limit) break;
@@ -1307,7 +1307,7 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
           providerStatus: SUBMITTED_FOR_VERIFICATION,
           stepLabel: 'Submitted for Verification',
           stepMessage:
-            'Number still pending after 1 hour — submitted for MTN verification (24–144 hours).',
+            'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). SMS sent to the recipient.',
         };
       }
     }

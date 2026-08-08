@@ -96,3 +96,10 @@ export async function sendOtpSms(to: string, code: string): Promise<void> {
   const message = `${PLATFORM_NAME} code: ${code}. Valid 10 minutes. Do not share.`;
   await sendSms(to, message);
 }
+
+/** Notify the recipient that their MTN number was submitted for network verification. */
+export async function sendMtnVerificationSms(to: string, displayPhone?: string): Promise<void> {
+  const phoneLabel = String(displayPhone || to).replace(/\D/g, '').slice(-10) || 'your number';
+  const message = `${PLATFORM_NAME}: ${phoneLabel} has been submitted to MTN for verification (24-144 hours). Later purchases to this number will be faster.`;
+  await sendSms(to, message);
+}

@@ -116,7 +116,7 @@ const settingSchema = new Schema<ISetting>(
       defaultProvider: { type: String, enum: ['smartdatahub', 'datamax'], default: 'smartdatahub' },
       networkRouting: {
         MTN: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'off' },
-        Telecel: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'smartdatahub' },
+        Telecel: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'datamax' },
         AirtelTigo: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'off' },
       },
       afaRouting: { type: String, enum: ['default', 'datamax', 'off'], default: 'datamax' },

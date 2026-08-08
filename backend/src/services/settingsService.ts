@@ -29,7 +29,7 @@ const defaultFulfillmentSettings = (): IFulfillmentSettings => ({
   defaultProvider: 'smartdatahub',
   networkRouting: {
     MTN: 'off',
-    Telecel: 'smartdatahub',
+    Telecel: 'datamax',
     AirtelTigo: 'off',
   },
   afaRouting: 'datamax',
@@ -112,9 +112,9 @@ export function migrateFulfillmentSettings(
   for (const network of NETWORKS) {
     const raw = routing?.[network];
     let normalized = normalizeNetworkRoute(raw);
-    // Telecel/Vodafone data must always go through Smart Data Hub (API code: vodafone).
-    if (network === 'Telecel' && (normalized === 'off' || raw === undefined)) {
-      normalized = 'smartdatahub';
+    // Telecel data always goes through Datamax; AFA is handled separately.
+    if (network === 'Telecel' && normalized !== 'datamax') {
+      normalized = 'datamax';
       dirty = true;
     }
     settings.networkRouting[network] = normalized;
@@ -128,6 +128,11 @@ export function resolveFulfillmentProviderFromSettings(
   settings: IFulfillmentSettings,
   network: Network
 ): FulfillmentProvider | null {
+  // Telecel data always uses Datamax (independent of legacy SDH routing).
+  if (network === 'Telecel') {
+    return settings.enabled === false ? null : 'datamax';
+  }
+
   if (!settings.enabled) return null;
 
   const route = normalizeNetworkRoute(settings.networkRouting?.[network]);

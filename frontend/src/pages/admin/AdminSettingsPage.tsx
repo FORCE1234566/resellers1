@@ -80,7 +80,7 @@ const AFA_ROUTE_OPTIONS: { value: AfaFulfillmentRoute; label: string }[] = [
 const defaultFulfillment: FulfillmentSettings = {
   enabled: false,
   defaultProvider: 'smartdatahub',
-  networkRouting: { MTN: 'off', Telecel: 'off', AirtelTigo: 'off' },
+  networkRouting: { MTN: 'off', Telecel: 'datamax', AirtelTigo: 'off' },
   afaRouting: 'datamax',
   providers: {
     smartdatahub: { configured: false, apiUrl: 'https://smartdatahubgh.com/api/v1' },

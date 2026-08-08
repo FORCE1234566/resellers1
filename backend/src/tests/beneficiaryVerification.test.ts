@@ -88,35 +88,64 @@ test('plain pending does not trigger immediate verification email status', () =>
   assert.equal(isExportedStatus('verification_pending'), true);
 });
 
-test('pending verification email only after 1 hour', async () => {
-  const { shouldSendPendingVerificationEmail, PENDING_VERIFICATION_EMAIL_DELAY_MS } =
-    await import('../services/beneficiaryVerificationService.js');
+test('pending verification email only after 3 hours in Ghana daytime', async () => {
+  const {
+    shouldSendPendingVerificationEmail,
+    PENDING_VERIFICATION_EMAIL_DELAY_MS,
+    isGhanaVerificationDaytime,
+  } = await import('../services/beneficiaryVerificationService.js');
 
-  const started = new Date(Date.now() - PENDING_VERIFICATION_EMAIL_DELAY_MS - 1000);
-  const tooRecent = new Date(Date.now() - 5 * 60 * 1000);
+  // Pick a fixed Ghana daytime / nighttime instant for deterministic checks.
+  const daytime = new Date('2026-08-08T12:00:00.000Z'); // 12:00 Accra (GMT)
+  const nighttime = new Date('2026-08-08T22:30:00.000Z'); // 22:30 Accra
+  const started = new Date(daytime.getTime() - PENDING_VERIFICATION_EMAIL_DELAY_MS - 1000);
+  const tooRecent = new Date(daytime.getTime() - 5 * 60 * 1000);
+
+  assert.equal(isGhanaVerificationDaytime(daytime), true);
+  assert.equal(isGhanaVerificationDaytime(nighttime), false);
 
   assert.equal(
-    shouldSendPendingVerificationEmail({
-      network: 'MTN',
-      providerStatus: 'pending',
-      statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
-    } as never),
+    shouldSendPendingVerificationEmail(
+      {
+        network: 'MTN',
+        providerStatus: 'pending',
+        statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
+      } as never,
+      daytime
+    ),
     true
   );
   assert.equal(
-    shouldSendPendingVerificationEmail({
-      network: 'MTN',
-      providerStatus: 'pending',
-      statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: tooRecent }],
-    } as never),
+    shouldSendPendingVerificationEmail(
+      {
+        network: 'MTN',
+        providerStatus: 'pending',
+        statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: tooRecent }],
+      } as never,
+      daytime
+    ),
     false
   );
   assert.equal(
-    shouldSendPendingVerificationEmail({
-      network: 'Telecel',
-      providerStatus: 'pending',
-      statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
-    } as never),
+    shouldSendPendingVerificationEmail(
+      {
+        network: 'MTN',
+        providerStatus: 'pending',
+        statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
+      } as never,
+      nighttime
+    ),
+    false
+  );
+  assert.equal(
+    shouldSendPendingVerificationEmail(
+      {
+        network: 'Telecel',
+        providerStatus: 'pending',
+        statusHistory: [{ step: 'pending', label: 'Gateway', message: 'x', done: false, at: started }],
+      } as never,
+      daytime
+    ),
     false
   );
 });

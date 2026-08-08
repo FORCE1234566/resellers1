@@ -6,13 +6,19 @@ import {
 } from '../models/BeneficiaryVerification';
 import { normalizeGhanaPhone } from '../utils/phone';
 import { sendMtnNumberVerificationEmail } from '../utils/email';
+import { sendMtnVerificationSms } from './smsService';
 
 /** MTN first-time numbers can take up to a week to verify. */
 export const BENEFICIARY_VERIFICATION_DAYS = 7;
-/** SDH "pending" must not email the customer until the order has stayed pending this long. */
-export const PENDING_VERIFICATION_EMAIL_DELAY_MS = 60 * 60 * 1000;
+/** SDH "pending" must stay this long (during Ghana daytime) before verification + SMS. */
+export const PENDING_VERIFICATION_EMAIL_DELAY_MS = 3 * 60 * 60 * 1000;
+/** Ghana local hour when daytime verification promotion may run (inclusive). */
+export const VERIFICATION_DAY_START_HOUR = 7;
+/** Ghana local hour when daytime verification promotion stops (exclusive) — 21 = 9pm. */
+export const VERIFICATION_DAY_END_HOUR = 21;
 export const SUBMITTED_FOR_VERIFICATION = 'submitted_for_verification';
 export const VERIFIED_PROVIDER_STATUS = 'verified';
+export const GHANA_TIME_ZONE = 'Africa/Accra';
 
 const VERIFICATION_TRIGGER_STATUSES = new Set([
   'exported',
@@ -22,6 +28,27 @@ const VERIFICATION_TRIGGER_STATUSES = new Set([
   'verification_pending',
   'unverified',
 ]);
+
+/** Current hour (0–23) in Ghana (Africa/Accra, no DST). */
+export function getGhanaHour(now: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: GHANA_TIME_ZONE,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const raw = parts.find((p) => p.type === 'hour')?.value ?? '0';
+  const hour = Number(raw);
+  return Number.isFinite(hour) ? hour % 24 : 0;
+}
+
+/**
+ * Verification promotion runs only 7:00–20:59 Ghana time.
+ * From 9pm to 7am, SDH pending orders stay pending (no submitted-for-verification).
+ */
+export function isGhanaVerificationDaytime(now: Date = new Date()): boolean {
+  const hour = getGhanaHour(now);
+  return hour >= VERIFICATION_DAY_START_HOUR && hour < VERIFICATION_DAY_END_HOUR;
+}
 
 /**
  * Immediate email triggers (exported / verification submission). Plain SDH "pending"
@@ -48,7 +75,7 @@ export function isPlainPendingStatus(raw?: string | null): boolean {
 
 /**
  * Start of the current SDH pending streak from order history.
- * Used for the 1-hour email delay.
+ * Used for the 3-hour daytime verification delay.
  */
 export function getSdhPendingStartedAt(order: IOrder): Date | null {
   if (!isPlainPendingStatus(order.providerStatus)) return null;
@@ -77,6 +104,8 @@ export function shouldSendPendingVerificationEmail(
 ): boolean {
   if (!isPlainPendingStatus(order.providerStatus)) return false;
   if (String(order.network || '').toUpperCase() !== 'MTN') return false;
+  // Overnight (9pm–7am Ghana): leave pending; do not mark submitted for verification.
+  if (!isGhanaVerificationDaytime(now)) return false;
   const started = getSdhPendingStartedAt(order);
   if (!started) return false;
   return now.getTime() - started.getTime() >= PENDING_VERIFICATION_EMAIL_DELAY_MS;
@@ -156,7 +185,7 @@ export async function markBeneficiarySubmittedForVerification(input: {
   sendEmail?: boolean;
   /** Admin manual update — send even if an email was already sent for this number. */
   forceEmail?: boolean;
-}): Promise<{ status: BeneficiaryVerificationStatus; emailSent: boolean }> {
+}): Promise<{ status: BeneficiaryVerificationStatus; emailSent: boolean; smsSent: boolean }> {
   const phone = normalizeBeneficiaryPhone(input.phone);
   const notifyEmails = [...new Set(
     [input.customerEmail, input.storeOwnerEmail, input.agentEmail]
@@ -167,6 +196,7 @@ export async function markBeneficiarySubmittedForVerification(input: {
   const existing = await BeneficiaryVerification.findOne({ phone, network: input.network });
   if (existing?.status === 'verified') {
     let emailSent = false;
+    let smsSent = false;
     if (input.forceEmail && input.sendEmail !== false && notifyEmails.length > 0) {
       try {
         await sendMtnNumberVerificationEmail(notifyEmails, {
@@ -185,7 +215,15 @@ export async function markBeneficiarySubmittedForVerification(input: {
         );
       }
     }
-    return { status: 'verified', emailSent };
+    if (input.forceEmail && input.sendEmail !== false) {
+      try {
+        await sendMtnVerificationSms(phone);
+        smsSent = true;
+      } catch (err) {
+        console.error('[MTN verification SMS failed]', phone, err instanceof Error ? err.message : err);
+      }
+    }
+    return { status: 'verified', emailSent, smsSent };
   }
 
   const now = new Date();
@@ -205,12 +243,12 @@ export async function markBeneficiarySubmittedForVerification(input: {
   record.lastOrderId = input.orderId;
 
   let emailSent = false;
-  const shouldEmail =
+  let smsSent = false;
+  const shouldNotify =
     input.sendEmail !== false &&
-    notifyEmails.length > 0 &&
     (input.forceEmail === true || !record.verificationEmailSentAt);
 
-  if (shouldEmail) {
+  if (shouldNotify && notifyEmails.length > 0) {
     try {
       await sendMtnNumberVerificationEmail(notifyEmails, {
         phone,
@@ -227,8 +265,20 @@ export async function markBeneficiarySubmittedForVerification(input: {
     }
   }
 
+  if (shouldNotify) {
+    try {
+      await sendMtnVerificationSms(phone);
+      if (!record.verificationEmailSentAt) {
+        record.verificationEmailSentAt = now;
+      }
+      smsSent = true;
+    } catch (err) {
+      console.error('[MTN verification SMS failed]', phone, err instanceof Error ? err.message : err);
+    }
+  }
+
   await record.save();
-  return { status: 'submitted_for_verification', emailSent };
+  return { status: 'submitted_for_verification', emailSent, smsSent };
 }
 
 export async function markBeneficiaryVerified(

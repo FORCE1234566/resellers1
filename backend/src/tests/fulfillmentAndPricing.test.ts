@@ -56,7 +56,7 @@ test('resolveFulfillmentProviderFromSettings respects network overrides', () => 
   settings.networkRouting.Telecel = 'off';
 
   assert.equal(resolveFulfillmentProviderFromSettings(settings, 'MTN'), 'smartdatahub');
-  assert.equal(resolveFulfillmentProviderFromSettings(settings, 'Telecel'), null);
+  assert.equal(resolveFulfillmentProviderFromSettings(settings, 'Telecel'), 'datamax');
   assert.equal(resolveFulfillmentProviderFromSettings(settings, 'AirtelTigo'), 'datamax');
 });
 
@@ -78,13 +78,13 @@ test('migrateFulfillmentSettings converts boolean routing', () => {
 
   assert.equal(dirty, true);
   assert.equal(settings.networkRouting.MTN, 'smartdatahub');
-  assert.equal(settings.networkRouting.Telecel, 'smartdatahub');
+  assert.equal(settings.networkRouting.Telecel, 'datamax');
   assert.equal(settings.networkRouting.AirtelTigo, 'smartdatahub');
   assert.equal(settings.defaultProvider, 'smartdatahub');
   assert.equal(settings.afaRouting, 'datamax');
 });
 
-test('migrateFulfillmentSettings forces Telecel off onto Smart Data Hub', () => {
+test('migrateFulfillmentSettings forces Telecel onto Datamax', () => {
   const { settings, dirty } = migrateFulfillmentSettings({
     enabled: true,
     defaultProvider: 'smartdatahub',
@@ -97,19 +97,19 @@ test('migrateFulfillmentSettings forces Telecel off onto Smart Data Hub', () => 
   });
 
   assert.equal(dirty, true);
-  assert.equal(settings.networkRouting.Telecel, 'smartdatahub');
+  assert.equal(settings.networkRouting.Telecel, 'datamax');
 });
 
-test('resolveAfaFulfillmentProviderFromSettings routes to Datamax or off', () => {
+test('resolveAfaFulfillmentProviderFromSettings always routes to Datamax', () => {
   const settings = baseSettings();
   assert.equal(resolveAfaFulfillmentProviderFromSettings(settings), 'datamax');
 
   settings.afaRouting = 'off';
-  assert.equal(resolveAfaFulfillmentProviderFromSettings(settings), null);
+  assert.equal(resolveAfaFulfillmentProviderFromSettings(settings), 'datamax');
 
   settings.afaRouting = 'default';
   settings.enabled = false;
-  assert.equal(resolveAfaFulfillmentProviderFromSettings(settings), null);
+  assert.equal(resolveAfaFulfillmentProviderFromSettings(settings), 'datamax');
 });
 
 test('normalizeAfaRoute defaults unknown values to datamax', () => {
