@@ -101,11 +101,12 @@ export function migrateFulfillmentSettings(
     enabled: current.enabled ?? base.enabled,
     defaultProvider: current.defaultProvider === 'datamax' ? 'datamax' : 'smartdatahub',
     networkRouting: { ...base.networkRouting },
-    afaRouting: normalizeAfaRoute(current.afaRouting ?? base.afaRouting),
+    // MTN AFA registration always routes to Datamax (never SDH / never off by migration).
+    afaRouting: 'datamax',
   };
 
   if (!current.defaultProvider) dirty = true;
-  if (current.afaRouting === undefined) dirty = true;
+  if (current.afaRouting !== 'datamax') dirty = true;
 
   const routing = current.networkRouting as Record<string, unknown> | undefined;
   for (const network of NETWORKS) {
@@ -135,13 +136,10 @@ export function resolveFulfillmentProviderFromSettings(
   return settings.defaultProvider || 'smartdatahub';
 }
 
-/** AFA registration is fulfilled via Datamax register API only. */
+/** AFA registration is always fulfilled via Datamax (independent of MTN data routing). */
 export function resolveAfaFulfillmentProviderFromSettings(
-  settings: IFulfillmentSettings
+  _settings: IFulfillmentSettings
 ): FulfillmentProvider | null {
-  if (!settings.enabled) return null;
-  const route = normalizeAfaRoute(settings.afaRouting);
-  if (route === 'off') return null;
   return 'datamax';
 }
 

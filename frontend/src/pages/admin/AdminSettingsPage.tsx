@@ -74,9 +74,7 @@ const defaultSettings: SettingsData = {
 };
 
 const AFA_ROUTE_OPTIONS: { value: AfaFulfillmentRoute; label: string }[] = [
-  { value: 'default', label: 'Use default (Datamax)' },
-  { value: 'datamax', label: 'Datamax' },
-  { value: 'off', label: 'Off' },
+  { value: 'datamax', label: 'Datamax (required)' },
 ];
 
 const defaultFulfillment: FulfillmentSettings = {

@@ -50,6 +50,14 @@ export interface StatusHistoryEntry {
 
 const QUEUED_PROVIDER_STATUSES = ['awaiting_provider_balance', 'submit_failed'] as const;
 
+function isProviderBalanceError(err: { statusCode?: number; message?: string }): boolean {
+  if (err.statusCode === 402) return true;
+  const msg = String(err.message || '');
+  return /insufficient|low\s*balance|no\s*(funds|balance|money)|top\s*-?\s*up|wallet.*(empty|low|insufficient)|balance.*(low|insufficient|not\s*enough)/i.test(
+    msg
+  );
+}
+
 function isFulfillmentProviderConfigured(provider: FulfillmentProvider): boolean {
   if (provider === 'smartdatahub') return isSmartDataHubConfigured();
   return isDatamaxConfigured();
@@ -346,7 +354,7 @@ async function submitToSmartDataHub(order: IOrder): Promise<IOrder | null> {
       stepMessage: data.message ? clientStepMessage(data.message) : 'Order submitted for processing',
     });
   } catch (err) {
-    if (err instanceof SmartDataHubError && err.statusCode === 402) {
+    if (err instanceof SmartDataHubError && isProviderBalanceError(err)) {
       return applyOrderStatusUpdate(order, {
         providerStatus: 'awaiting_provider_balance',
         fulfillmentProvider: 'smartdatahub',
@@ -408,7 +416,7 @@ async function submitToDatamaxAfa(order: IOrder): Promise<IOrder | null> {
         `Submitted for processing — allow ${AFA_PROCESSING_HOURS} hours, then dial ${AFA_CHECK_USSD} to check`,
     });
   } catch (err) {
-    if (err instanceof DatamaxError && err.statusCode === 402) {
+    if (err instanceof DatamaxError && isProviderBalanceError(err)) {
       return applyOrderStatusUpdate(order, {
         providerStatus: 'awaiting_provider_balance',
         fulfillmentProvider: 'datamax',
@@ -456,7 +464,7 @@ async function submitToDatamax(order: IOrder): Promise<IOrder | null> {
         : 'Order submitted for processing',
     });
   } catch (err) {
-    if (err instanceof DatamaxError && err.statusCode === 402) {
+    if (err instanceof DatamaxError && isProviderBalanceError(err)) {
       return applyOrderStatusUpdate(order, {
         providerStatus: 'awaiting_provider_balance',
         fulfillmentProvider: 'datamax',
@@ -808,8 +816,10 @@ async function syncFromDatamax(order: IOrder): Promise<IOrder | null> {
 }
 
 export async function syncOrderFromProvider(order: IOrder): Promise<IOrder | null> {
-  const provider =
-    order.fulfillmentProvider ?? (await resolveFulfillmentProvider(order.network));
+  const isAfa = isAfaProduct(order.productType, order.bundleSize);
+  const provider = isAfa
+    ? order.fulfillmentProvider ?? (await resolveAfaFulfillmentProvider())
+    : order.fulfillmentProvider ?? (await resolveFulfillmentProvider(order.network));
   if (!provider) return order;
 
   if (provider === 'datamax') return syncFromDatamax(order);
@@ -817,17 +827,26 @@ export async function syncOrderFromProvider(order: IOrder): Promise<IOrder | nul
 }
 
 export async function retryQueuedFulfillmentOrders(limit = 30): Promise<number> {
+  // Include AFA orders that never got a Datamax order id (e.g. no funds at submit time).
   const queued = await Order.find({
-    providerStatus: { $in: [...QUEUED_PROVIDER_STATUSES] },
     status: { $in: ['pending', 'processing'] },
+    $or: [
+      { providerStatus: { $in: [...QUEUED_PROVIDER_STATUSES] } },
+      {
+        productType: 'afa',
+        $or: [{ providerOrderId: { $exists: false } }, { providerOrderId: null }, { providerOrderId: '' }],
+      },
+    ],
   })
     .sort({ createdAt: 1 })
     .limit(limit);
 
   let retried = 0;
   for (const order of queued) {
-    const provider =
-      order.fulfillmentProvider ?? (await resolveFulfillmentProvider(order.network));
+    const isAfa = isAfaProduct(order.productType, order.bundleSize);
+    const provider = isAfa
+      ? order.fulfillmentProvider ?? (await resolveAfaFulfillmentProvider())
+      : order.fulfillmentProvider ?? (await resolveFulfillmentProvider(order.network));
     if (!provider || !isFulfillmentProviderConfigured(provider)) continue;
     await submitOrderToProvider(order);
     retried++;
