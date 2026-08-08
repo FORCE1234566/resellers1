@@ -474,7 +474,8 @@ export const createOrder = async (input: CreateOrderInput) => {
             : 'Checker assigned. Email/SMS delivery had an issue — codes are on the order.',
       });
     }
-  } else if (env.fulfillment.enabled || env.datamax.enabled) {
+  } else if (isAfa ? true : env.fulfillment.enabled || env.datamax.enabled) {
+    // AFA always attempts Datamax submit (queues if wallet is empty).
     await submitOrderToProvider(order);
   } else if (env.devAutoDeliver) {
   // Simulate order processing (local dev only)
