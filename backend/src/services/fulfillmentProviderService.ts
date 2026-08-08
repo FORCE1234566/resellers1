@@ -405,15 +405,15 @@ async function submitToDatamaxAfa(order: IOrder): Promise<IOrder | null> {
           : order.orderId;
 
     return applyOrderStatusUpdate(order, {
-      status: 'delivered',
-      providerStatus: 'delivered',
+      status: 'processing',
+      providerStatus: 'afa_submitted',
       fulfillmentProvider: 'datamax',
       providerOrderId,
       providerReference: order.orderId,
-      stepLabel: 'Registration Delivered',
+      stepLabel: 'Registration Processing',
       stepMessage:
         response.message ||
-        `AFA submitted to network — allow ${AFA_PROCESSING_HOURS} hours, then dial ${AFA_CHECK_USSD} to check status.`,
+        `AFA submitted — stays processing for ${AFA_PROCESSING_HOURS} hours, then marked delivered. Dial ${AFA_CHECK_USSD} to check status.`,
     });
   } catch (err) {
     if (err instanceof DatamaxError && isProviderBalanceError(err)) {
@@ -911,12 +911,15 @@ export async function syncFulfillmentStatuses(scope: FulfillmentScope = {}, limi
     await Promise.all(chunk.map((order) => syncOrderFromProvider(order).catch(() => null)));
   }
 
-  // Also promote aged verification orders so dashboards stay current without waiting for cron.
+  // Also promote aged verification / AFA orders so dashboards stay current without waiting for cron.
   void autoDeliverAgedVerificationOrders(Math.min(limit, 40)).catch((err) => {
     console.error(
       '[autoDeliverAgedVerificationOrders]',
       err instanceof Error ? err.message : err
     );
+  });
+  void autoDeliverAgedAfaOrders(Math.min(limit, 40)).catch((err) => {
+    console.error('[autoDeliverAgedAfaOrders]', err instanceof Error ? err.message : err);
   });
   void sendVerificationEmailsForAgedPendingOrders(Math.min(limit, 30)).catch((err) => {
     console.error(
@@ -956,6 +959,62 @@ export async function autoDeliverAgedVerificationOrders(limit = 100): Promise<nu
   }
 
   await autoVerifyAgedBeneficiaries(limit);
+  return delivered;
+}
+
+/** When AFA was submitted to Datamax (for the 24-hour auto-deliver clock). */
+export function getAfaSubmittedAt(order: IOrder): Date | null {
+  if (!isAfaProduct(order.productType, order.bundleSize)) return null;
+
+  const history = [...(order.statusHistory || [])].reverse();
+  for (const entry of history) {
+    const step = String(entry.step || '').toLowerCase().replace(/\s+/g, '_');
+    const label = String(entry.label || '').toLowerCase();
+    if (
+      step === 'afa_submitted' ||
+      label.includes('registration processing') ||
+      label.includes('registration submitted')
+    ) {
+      return entry.at ? new Date(entry.at) : null;
+    }
+  }
+
+  if (order.providerStatus === 'afa_submitted') {
+    return order.updatedAt ? new Date(order.updatedAt) : order.createdAt ? new Date(order.createdAt) : null;
+  }
+  return null;
+}
+
+/**
+ * MTN AFA registrations stay on processing after Datamax accept,
+ * then are marked delivered exactly AFA_PROCESSING_HOURS (24) later.
+ */
+export async function autoDeliverAgedAfaOrders(limit = 100): Promise<number> {
+  const delayMs = AFA_PROCESSING_HOURS * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - delayMs);
+
+  const orders = await Order.find({
+    productType: 'afa',
+    status: 'processing',
+    providerStatus: { $in: ['afa_submitted', 'processing', 'gateway_processing'] },
+    fulfillmentProvider: 'datamax',
+  })
+    .sort({ updatedAt: 1 })
+    .limit(limit);
+
+  let delivered = 0;
+  for (const order of orders) {
+    const submittedAt = getAfaSubmittedAt(order) || (order.createdAt ? new Date(order.createdAt) : null);
+    if (!submittedAt || submittedAt > cutoff) continue;
+
+    await applyOrderStatusUpdate(order, {
+      status: 'delivered',
+      providerStatus: 'delivered',
+      stepLabel: 'Registration Delivered',
+      stepMessage: `Automatically marked delivered after ${AFA_PROCESSING_HOURS} hours. Dial ${AFA_CHECK_USSD} if you still need to confirm on the line.`,
+    });
+    delivered++;
+  }
   return delivered;
 }
 
@@ -1020,7 +1079,8 @@ export async function runFulfillmentBackgroundSync(limit = 80): Promise<{
 
   const pendingEmails = await sendVerificationEmailsForAgedPendingOrders(40);
   const autoDelivered = await autoDeliverAgedVerificationOrders(100);
-  return { synced, autoDelivered, pendingEmails };
+  const afaDelivered = await autoDeliverAgedAfaOrders(100);
+  return { synced, autoDelivered: autoDelivered + afaDelivered, pendingEmails };
 }
 
 export async function getFulfillmentStatusCounts(scope: FulfillmentScope = {}) {
@@ -1070,6 +1130,7 @@ export async function syncInFlightOrders(orders: IOrder[]) {
   }
 
   void autoDeliverAgedVerificationOrders(20).catch(() => {});
+  void autoDeliverAgedAfaOrders(20).catch(() => {});
   void sendVerificationEmailsForAgedPendingOrders(20).catch(() => {});
 }
 
