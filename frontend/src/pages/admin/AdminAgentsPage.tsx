@@ -44,7 +44,11 @@ export default function AdminAgentsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [rewardTarget, setRewardTarget] = useState<{ id: string; fullName: string } | null>(null);
-  const [topUpTarget, setTopUpTarget] = useState<{ id: string; fullName: string; balance: number } | null>(null);
+  const [topUpTarget, setTopUpTarget] = useState<{
+    id: string;
+    fullName: string;
+    balance: number;
+    mode?: 'add' | 'deduct';  } | null>(null);
   const [pricesTarget, setPricesTarget] = useState<{ id: string; fullName: string } | null>(null);
   const [apiActionId, setApiActionId] = useState<string | null>(null);
 
@@ -325,7 +329,7 @@ export default function AdminAgentsPage() {
                         </ActionChip>
 
                         <ActionChip
-                          title="Adjust wallet (add or deduct)"
+                          title="Add money to wallet"
                           active
                           activeTone="emerald"
                           disabled={busy}
@@ -334,11 +338,30 @@ export default function AdminAgentsPage() {
                               id: d._id,
                               fullName: d.fullName,
                               balance: d.walletBalance ?? 0,
+                              mode: 'add',
                             })
                           }
                         >
                           <Wallet className="w-3 h-3" />
-                          Wallet
+                          Top up
+                        </ActionChip>
+
+                        <ActionChip
+                          title="Deduct money from wallet (e.g. cash paid)"
+                          active
+                          activeTone="rose"
+                          disabled={busy || (d.walletBalance ?? 0) <= 0}
+                          onClick={() =>
+                            setTopUpTarget({
+                              id: d._id,
+                              fullName: d.fullName,
+                              balance: d.walletBalance ?? 0,
+                              mode: 'deduct',
+                            })
+                          }
+                        >
+                          <Wallet className="w-3 h-3" />
+                          Deduct
                         </ActionChip>
 
                         <ActionChip
@@ -395,6 +418,7 @@ export default function AdminAgentsPage() {
           userId={topUpTarget.id}
           fullName={topUpTarget.fullName}
           currentBalance={topUpTarget.balance}
+          initialMode={topUpTarget.mode || 'add'}
           onClose={() => setTopUpTarget(null)}
           onSuccess={loadAgents}
         />

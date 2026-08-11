@@ -11,17 +11,23 @@ export default function AdminAgentTopUpModal({
   userId,
   fullName,
   currentBalance,
+  initialMode = 'add',
   onClose,
   onSuccess,
 }: {
   userId: string;
   fullName: string;
   currentBalance: number;
+  initialMode?: 'add' | 'deduct';
   onClose: () => void;
   onSuccess?: () => void;
 }) {
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
+  const [amount, setAmount] = useState(
+    initialMode === 'deduct' && currentBalance > 0 ? String(currentBalance) : ''
+  );
+  const [note, setNote] = useState(
+    initialMode === 'deduct' ? 'Physical cash payment settled' : ''
+  );
   const [paystackRef, setPaystackRef] = useState('');
   const [adminOtp, setAdminOtp] = useState('');
   const [error, setError] = useState('');
@@ -123,7 +129,9 @@ export default function AdminAgentTopUpModal({
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-semibold text-gray-900">Adjust agent wallet</h2>
+            <h2 className="font-semibold text-gray-900">
+              {initialMode === 'deduct' ? 'Deduct from agent wallet' : 'Top up agent wallet'}
+            </h2>
             <p className="text-sm text-gray-500">{fullName}</p>
             <p className="text-xs text-gray-400 mt-0.5">Current balance: GHS {currentBalance.toFixed(2)}</p>
           </div>
@@ -146,7 +154,7 @@ export default function AdminAgentTopUpModal({
             label="Note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. MoMo deposit received, or deposit reversal"
+            placeholder="e.g. MoMo deposit received, or cash payment settled"
             rows={2}
           />
           <AdminPasswordConfirm value={adminOtp} onChange={setAdminOtp} autoSendOnMount />

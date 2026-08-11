@@ -13,7 +13,7 @@ export default function ActionChip({
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
-  activeTone?: 'emerald' | 'amber' | 'sky' | 'violet';
+  activeTone?: 'emerald' | 'amber' | 'sky' | 'violet' | 'rose';
   inactiveTone?: 'slate' | 'rose';
   children: ReactNode;
   title?: string;
@@ -24,6 +24,7 @@ export default function ActionChip({
         amber: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
         sky: 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100',
         violet: 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100',
+        rose: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
       }[activeTone]
     : {
         slate: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100',
