@@ -330,12 +330,9 @@ export const sendAfaRegistrationAdminEmail = async (input: {
     `Someone has placed an MTN AFA registration order.`,
     '',
     `Order: ${input.orderId}`,
-    `Name: ${input.fullName}`,
     `Phone: ${input.phone}`,
-    `Ghana Card: ${input.ghanaCard}`,
-    `Location: ${input.location}`,
-    `Occupation: ${input.occupation || '—'}`,
     `Customer email: ${input.customerEmail || '—'}`,
+    `Name: ${input.fullName}`,
     `Source: ${input.source || '—'}`,
     '',
     'Please process this AFA registration.',
@@ -352,12 +349,9 @@ export const sendAfaRegistrationAdminEmail = async (input: {
       </p>
       <div style="background:#f3f4f6;border-radius:8px;padding:14px;margin:0 0 16px;">
         <p style="margin:0 0 6px;"><strong>Order:</strong> ${input.orderId}</p>
-        <p style="margin:0 0 6px;"><strong>Name:</strong> ${input.fullName}</p>
         <p style="margin:0 0 6px;"><strong>Phone:</strong> ${input.phone}</p>
-        <p style="margin:0 0 6px;"><strong>Ghana Card:</strong> ${input.ghanaCard}</p>
-        <p style="margin:0 0 6px;"><strong>Location:</strong> ${input.location}</p>
-        <p style="margin:0 0 6px;"><strong>Occupation:</strong> ${input.occupation || '—'}</p>
         <p style="margin:0 0 6px;"><strong>Customer email:</strong> ${input.customerEmail || '—'}</p>
+        <p style="margin:0 0 6px;"><strong>Name:</strong> ${input.fullName}</p>
         <p style="margin:0;"><strong>Source:</strong> ${input.source || '—'}</p>
       </div>
       <p style="color:#6b7280;font-size:13px;margin:0;">Please process this AFA registration.</p>

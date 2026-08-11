@@ -6,11 +6,10 @@ import {
 } from '../models/BeneficiaryVerification';
 import { normalizeGhanaPhone } from '../utils/phone';
 import { sendMtnNumberVerificationEmail } from '../utils/email';
-import { sendMtnVerificationSms } from './smsService';
 
 /** MTN first-time numbers can take up to a week to verify. */
 export const BENEFICIARY_VERIFICATION_DAYS = 7;
-/** SDH "pending" must stay this long (during Ghana daytime) before verification + SMS. */
+/** SDH "pending" must stay this long (during Ghana daytime) before verification email. */
 export const PENDING_VERIFICATION_EMAIL_DELAY_MS = 3 * 60 * 60 * 1000;
 /** Ghana local hour when daytime verification promotion may run (inclusive). */
 export const VERIFICATION_DAY_START_HOUR = 7;
@@ -196,7 +195,6 @@ export async function markBeneficiarySubmittedForVerification(input: {
   const existing = await BeneficiaryVerification.findOne({ phone, network: input.network });
   if (existing?.status === 'verified') {
     let emailSent = false;
-    let smsSent = false;
     if (input.forceEmail && input.sendEmail !== false && notifyEmails.length > 0) {
       try {
         await sendMtnNumberVerificationEmail(notifyEmails, {
@@ -215,15 +213,7 @@ export async function markBeneficiarySubmittedForVerification(input: {
         );
       }
     }
-    if (input.forceEmail && input.sendEmail !== false) {
-      try {
-        await sendMtnVerificationSms(phone);
-        smsSent = true;
-      } catch (err) {
-        console.error('[MTN verification SMS failed]', phone, err instanceof Error ? err.message : err);
-      }
-    }
-    return { status: 'verified', emailSent, smsSent };
+    return { status: 'verified', emailSent, smsSent: false };
   }
 
   const now = new Date();
@@ -243,7 +233,6 @@ export async function markBeneficiarySubmittedForVerification(input: {
   record.lastOrderId = input.orderId;
 
   let emailSent = false;
-  let smsSent = false;
   const shouldNotify =
     input.sendEmail !== false &&
     (input.forceEmail === true || !record.verificationEmailSentAt);
@@ -265,20 +254,8 @@ export async function markBeneficiarySubmittedForVerification(input: {
     }
   }
 
-  if (shouldNotify) {
-    try {
-      await sendMtnVerificationSms(phone);
-      if (!record.verificationEmailSentAt) {
-        record.verificationEmailSentAt = now;
-      }
-      smsSent = true;
-    } catch (err) {
-      console.error('[MTN verification SMS failed]', phone, err instanceof Error ? err.message : err);
-    }
-  }
-
   await record.save();
-  return { status: 'submitted_for_verification', emailSent, smsSent };
+  return { status: 'submitted_for_verification', emailSent, smsSent: false };
 }
 
 export async function markBeneficiaryVerified(

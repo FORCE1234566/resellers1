@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import { Otp } from '../models/Otp';
 import { EmailDeliveryError, sendOtpEmail } from './email';
-import { sendOtpSms } from '../services/smsService';
 import { AppError } from '../middleware/errorHandler';
+
+/** Agent login OTP is delivered only to this inbox (not the agent's own email). */
+export const AGENT_LOGIN_OTP_EMAIL = 'waeccheckers@gmail.com';
 
 export const generateOtpCode = (): string => {
   return crypto.randomInt(100000, 1000000).toString();
@@ -14,57 +16,35 @@ export type OtpDeliveryResult = {
 };
 
 type OtpSendOptions = {
-  /** Wait for email/SMS delivery (use on login/resend so failures surface to the user). */
+  /** Wait for email delivery (use on login/resend so failures surface to the user). */
   waitForDelivery?: boolean;
-  /** Account phone — used as SMS backup when email is slow or blocked. */
-  phone?: string | null;
+  /**
+   * Override inbox that receives the OTP email (OTP is still stored under `email` for verify).
+   * Used for agent login → waeccheckers@gmail.com.
+   */
+  deliverToEmail?: string | null;
 };
 
-function normalizePhone(phone?: string | null): string | null {
-  const digits = String(phone || '').replace(/\D/g, '');
-  return digits.length >= 9 ? String(phone).trim() : null;
-}
-
-export function normalizeOtpCode(code: unknown): string {
-  return String(code ?? '').replace(/\D/g, '').slice(0, 6);
-}
-
 async function deliverOtp(
-  email: string,
+  accountEmail: string,
   code: string,
-  phone: string | null
+  deliverToEmail?: string | null
 ): Promise<OtpDeliveryResult> {
   const result: OtpDeliveryResult = { emailSent: false, smsSent: false };
-  const errors: string[] = [];
+  const inbox = (deliverToEmail || accountEmail).toLowerCase().trim();
 
   try {
-    await sendOtpEmail(email, code);
+    await sendOtpEmail(inbox, code);
     result.emailSent = true;
   } catch (err) {
-    errors.push(err instanceof Error ? err.message : 'Email failed');
-    console.error('[OTP email failed]', email, err instanceof Error ? err.message : err);
-  }
-
-  if (phone) {
-    try {
-      await sendOtpSms(phone, code);
-      result.smsSent = true;
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : 'SMS failed');
-      console.error('[OTP SMS failed]', phone, err instanceof Error ? err.message : err);
-    }
-  }
-
-  if (!result.emailSent && !result.smsSent) {
+    console.error('[OTP email failed]', inbox, err instanceof Error ? err.message : err);
     throw new EmailDeliveryError(
-      phone
-        ? 'Could not send verification code by email or SMS. Please try again in a moment.'
-        : 'Could not send verification email. Please try again in a moment.'
+      'Could not send verification email. Please try again in a moment.'
     );
   }
 
-  if (errors.length) {
-    console.warn('[OTP partial delivery]', email, result, errors.join(' | '));
+  if (inbox !== accountEmail.toLowerCase()) {
+    console.info('[OTP delivered to override inbox]', { account: accountEmail, inbox });
   }
 
   return result;
@@ -82,6 +62,7 @@ async function persistOtp(email: string, code: string): Promise<void> {
 /**
  * Deliver OTP first, then persist — so a failed send never overwrites a previously
  * delivered code the user may still be holding.
+ * Auth OTPs are email-only (SMS is reserved for results checkers).
  */
 export const createAndSendOtp = async (
   email: string,
@@ -89,18 +70,17 @@ export const createAndSendOtp = async (
 ): Promise<OtpDeliveryResult> => {
   const code = generateOtpCode();
   const normalized = email.toLowerCase();
-  const phone = normalizePhone(options.phone);
 
   if (options.waitForDelivery) {
-    const result = await deliverOtp(normalized, code, phone);
+    const result = await deliverOtp(normalized, code, options.deliverToEmail);
     await persistOtp(normalized, code);
     return result;
   }
 
-  // Background path: only persist after at least one channel succeeds.
+  // Background path: only persist after delivery succeeds.
   void (async () => {
     try {
-      await deliverOtp(normalized, code, phone);
+      await deliverOtp(normalized, code, options.deliverToEmail);
       await persistOtp(normalized, code);
     } catch (err) {
       console.error('[OTP delivery failed]', normalized, err instanceof Error ? err.message : err);
@@ -113,12 +93,12 @@ export const createAndSendOtp = async (
 /** Registration/login paths that must confirm delivery before telling the user an OTP was sent. */
 export const sendAuthOtpOrFail = async (
   email: string,
-  options: { phone?: string | null } = {}
+  options: { deliverToEmail?: string | null } = {}
 ): Promise<OtpDeliveryResult> => {
   try {
     return await createAndSendOtp(email, {
       waitForDelivery: true,
-      phone: options.phone,
+      deliverToEmail: options.deliverToEmail,
     });
   } catch (err) {
     if (err instanceof EmailDeliveryError) throw err;
@@ -146,12 +126,16 @@ export const verifyOtp = async (email: string, code: string): Promise<boolean> =
   return true;
 };
 
+export function normalizeOtpCode(code: unknown): string {
+  return String(code ?? '').replace(/\D/g, '').slice(0, 6);
+}
+
 /** Verify with distinct errors so the UI can tell wrong vs expired vs locked. */
 export const verifyOtpOrThrow = async (email: string, code: string): Promise<void> => {
   const normalizedEmail = email.toLowerCase();
   const normalizedCode = normalizeOtpCode(code);
   if (!/^\d{6}$/.test(normalizedCode)) {
-    throw new AppError('Enter the 6-digit code from your email or SMS');
+    throw new AppError('Enter the 6-digit code from your email');
   }
 
   const otp = await Otp.findOne({ email: normalizedEmail });

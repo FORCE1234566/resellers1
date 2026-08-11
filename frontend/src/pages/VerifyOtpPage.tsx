@@ -7,17 +7,16 @@ import BackHomeLink from '@/components/ui/BackHomeLink';
 
 type OtpDelivery = { emailSent?: boolean; smsSent?: boolean };
 
-function deliveryMessage(delivery?: OtpDelivery | null): string {
-  if (delivery?.smsSent && delivery?.emailSent) {
-    return 'A new code has been sent to your email and phone SMS. Check inbox, spam, and texts.';
-  }
-  if (delivery?.smsSent) {
-    return 'A new code has been sent to your phone by SMS.';
+function deliveryMessage(delivery?: OtpDelivery | null, isAgentLogin?: boolean): string {
+  if (isAgentLogin) {
+    return delivery?.emailSent
+      ? 'A verification code was sent to the admin inbox. Enter it below.'
+      : 'Enter the verification code from the admin inbox.';
   }
   if (delivery?.emailSent) {
     return 'A new code has been sent to your email. Check inbox and spam folder.';
   }
-  return 'A new code has been sent. Check your email inbox, spam folder, and phone SMS.';
+  return 'A new code has been sent to your email. Check inbox and spam folder.';
 }
 
 export default function VerifyOtpPage() {
@@ -62,15 +61,14 @@ export default function VerifyOtpPage() {
     setTimeout(() => inputs.current[0]?.focus(), 100);
 
     const emailAlreadySent = sessionStorage.getItem('otpEmailSent') === '1';
-    const smsAlreadySent = sessionStorage.getItem('otpSmsSent') === '1';
-    // Never auto-resend — a second code invalidates the one already in the user's inbox/SMS.
+    const isAgentLogin = role === 'agent';
+    // Never auto-resend — a second code invalidates the one already delivered.
     if (resolvedMode === 'email') {
       setResendMessage(
         deliveryMessage(
-          emailAlreadySent || smsAlreadySent
-            ? { emailSent: emailAlreadySent, smsSent: smsAlreadySent }
-            : { emailSent: true }
-        ).replace('A new code has been sent', 'A verification code was sent')
+          emailAlreadySent ? { emailSent: true } : { emailSent: true },
+          isAgentLogin
+        ).replace(/^A new code has been sent/, isAgentLogin ? 'A verification code was sent' : 'A verification code was sent')
       );
       setResendCooldown(30);
     }
@@ -159,13 +157,14 @@ export default function VerifyOtpPage() {
     setResending(true);
     setResendMessage('');
     setError('');
+    const isAgentLogin = (sessionStorage.getItem('otpRole') || '') === 'agent';
     try {
       const { data } = await api.post('/auth/resend-otp', { email });
       const delivery = data?.data as OtpDelivery;
       sessionStorage.setItem('otpEmailSent', delivery?.emailSent ? '1' : '0');
-      sessionStorage.setItem('otpSmsSent', delivery?.smsSent ? '1' : '0');
+      sessionStorage.setItem('otpSmsSent', '0');
       setResendMessage(
-        `${deliveryMessage(delivery)} Previous codes no longer work — use only this latest code.`
+        `${deliveryMessage(delivery, isAgentLogin)} Previous codes no longer work — use only this latest code.`
       );
       setResendCooldown(30);
       setOtp(['', '', '', '', '', '']);
@@ -190,14 +189,20 @@ export default function VerifyOtpPage() {
           <BrandLogo size="lg" />
         </div>
         <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">
-          {mfaMode === 'totp' ? 'Authenticator Code' : 'Verify Your Email'}
+          {mfaMode === 'totp' ? 'Authenticator Code' : 'Verify OTP'}
         </h1>
         <p className="text-gray-400 mb-2">
           {mfaMode === 'totp'
             ? 'Enter the 6-digit code from your authenticator app for'
-            : 'Enter the 6-digit code sent to'}
+            : (sessionStorage.getItem('otpRole') || '') === 'agent'
+              ? 'Enter the 6-digit code sent to the admin inbox for'
+              : 'Enter the 6-digit code sent to'}
         </p>
-        <p className="text-white font-medium mb-8">{email}</p>
+        <p className="text-white font-medium mb-8">
+          {(sessionStorage.getItem('otpRole') || '') === 'agent' && mfaMode !== 'totp'
+            ? 'waeccheckers@gmail.com'
+            : email}
+        </p>
 
         <div className="bg-white rounded-xl border shadow-xl shadow-black/20 p-6">
           <div className="flex justify-center gap-1.5 min-[360px]:gap-2 sm:gap-3 mb-4 max-w-full" onPaste={handlePaste}>

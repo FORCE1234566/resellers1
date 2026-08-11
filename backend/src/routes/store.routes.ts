@@ -482,6 +482,7 @@ router.post('/:slug/purchase/init', purchaseLimiter, blockStorePricing, asyncHan
 
   if (isAfa) {
     await assertAfaInStock();
+    if (!recipientPhone) throw new AppError('Beneficiary phone is required');
     afaDetails = validateAfaDetails({ fullName, phone: recipientPhone, ghanaCard, location, occupation });
     phone = afaDetails.phone;
   } else {

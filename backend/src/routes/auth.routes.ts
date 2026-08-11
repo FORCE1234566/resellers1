@@ -21,7 +21,7 @@ import {
   roleRequiresMfa,
   verifyTotpCode,
 } from '../services/totpService';
-import { sendAuthOtpOrFail, verifyOtpOrThrow } from '../utils/otp';
+import { sendAuthOtpOrFail, verifyOtpOrThrow, AGENT_LOGIN_OTP_EMAIL } from '../utils/otp';
 import { signAccessToken } from '../utils/jwt';
 import { EmailDeliveryError, sendPasswordResetEmail } from '../utils/email';
 import { getCanonicalFrontendUrl } from '../config/urls';
@@ -118,7 +118,7 @@ async function handleExistingRegistrationEmail(
       await existing.save();
       return { type: 'activated' };
     }
-    const delivery = await sendAuthOtpOrFail(email, { phone: existing.phone });
+    const delivery = await sendAuthOtpOrFail(email);
     return { type: 'otp_sent', delivery };
   }
   throw new AppError(
@@ -220,11 +220,11 @@ router.post(
       return;
     }
 
-    const delivery = await sendAuthOtpOrFail(email, { phone });
+    const delivery = await sendAuthOtpOrFail(email);
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify OTP sent to your email or phone.',
+      message: 'Registration successful. Please verify OTP sent to your email.',
       data: {
         email: user.email,
         requiresOtp: true,
@@ -378,11 +378,11 @@ router.post(
       return;
     }
 
-    const delivery = await sendAuthOtpOrFail(email, { phone });
+    const delivery = await sendAuthOtpOrFail(email);
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify OTP sent to your email or phone.',
+      message: 'Registration successful. Please verify OTP sent to your email.',
       data: {
         email: user.email,
         requiresOtp: true,
@@ -460,13 +460,18 @@ router.post(
     }
 
     const prefersTotp = prefersTotpLogin(user);
+    const isAgentLogin =
+      role === 'agent' ||
+      user.role === 'agent' ||
+      (user.role as string) === 'dealer';
+    const otpDeliveryOpts = isAgentLogin ? { deliverToEmail: AGENT_LOGIN_OTP_EMAIL } : {};
     let delivery = { emailSent: false, smsSent: false };
     if (!prefersTotp) {
-      delivery = await sendAuthOtpOrFail(normalizedEmail, { phone: user.phone });
+      delivery = await sendAuthOtpOrFail(normalizedEmail, otpDeliveryOpts);
     } else if (roleRequiresMfa(user.role)) {
-      // Still try email/SMS backup so agent/reseller can use inbox OTP if authenticator fails.
+      // Still try email backup so agent/reseller can use inbox OTP if authenticator fails.
       try {
-        delivery = await sendAuthOtpOrFail(normalizedEmail, { phone: user.phone });
+        delivery = await sendAuthOtpOrFail(normalizedEmail, otpDeliveryOpts);
       } catch (err) {
         console.error(
           '[Login backup OTP delivery failed]',
@@ -479,12 +484,10 @@ router.post(
     res.json({
       success: true,
       message: prefersTotp
-        ? 'Enter your authenticator code, or use the email/SMS OTP backup'
-        : delivery.smsSent && delivery.emailSent
-          ? 'OTP sent to your email and phone'
-          : delivery.smsSent
-            ? 'OTP sent to your phone by SMS'
-            : 'OTP sent to your email',
+        ? 'Enter your authenticator code, or use the email OTP backup'
+        : isAgentLogin
+          ? 'OTP sent — enter the code from the admin verification inbox'
+          : 'OTP sent to your email',
       data: {
         email: user.email,
         role: user.role,
@@ -679,15 +682,17 @@ router.post(
       return;
     }
 
-    const delivery = await sendAuthOtpOrFail(normalizedEmail, { phone: user.phone });
+    const isAgentUser =
+      user.role === 'agent' || (user.role as string) === 'dealer';
+    const delivery = await sendAuthOtpOrFail(
+      normalizedEmail,
+      isAgentUser ? { deliverToEmail: AGENT_LOGIN_OTP_EMAIL } : {}
+    );
     res.json({
       success: true,
-      message:
-        delivery.smsSent && delivery.emailSent
-          ? 'A new code was sent to your email and phone.'
-          : delivery.smsSent
-            ? 'A new code was sent to your phone by SMS.'
-            : 'A new code was sent to your email.',
+      message: isAgentUser
+        ? 'A new code was sent to the admin verification inbox.'
+        : 'A new code was sent to your email.',
       data: delivery,
     });
   })

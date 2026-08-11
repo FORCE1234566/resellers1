@@ -26,17 +26,22 @@ export default function AdminAgentTopUpModal({
   const [adminOtp, setAdminOtp] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deducting, setDeducting] = useState(false);
   const [reconciling, setReconciling] = useState(false);
+
+  const parsedAmount = Number(amount);
+  const amountOk = !!amount && !Number.isNaN(parsedAmount) && parsedAmount > 0;
+  const otpOk = /^\d{6}$/.test(adminOtp);
+  const busy = submitting || deducting || reconciling;
 
   const handleTopUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const parsed = Number(amount);
-    if (!amount || Number.isNaN(parsed) || parsed <= 0) {
+    if (!amountOk) {
       setError('Enter a valid amount greater than zero');
       return;
     }
-    if (!/^\d{6}$/.test(adminOtp)) {
+    if (!otpOk) {
       setError('Enter the 6-digit verification code from your email');
       return;
     }
@@ -44,7 +49,7 @@ export default function AdminAgentTopUpModal({
     setSubmitting(true);
     try {
       await api.post(`/admin/agents/${userId}/wallet/top-up`, {
-        amount: parsed,
+        amount: parsedAmount,
         note: note.trim() || undefined,
         adminOtp,
       });
@@ -57,12 +62,43 @@ export default function AdminAgentTopUpModal({
     }
   };
 
+  const handleDeduct = async () => {
+    setError('');
+    if (!amountOk) {
+      setError('Enter a valid amount greater than zero');
+      return;
+    }
+    if (parsedAmount > currentBalance) {
+      setError(`Cannot deduct more than current balance (GHS ${currentBalance.toFixed(2)})`);
+      return;
+    }
+    if (!otpOk) {
+      setError('Enter the 6-digit verification code from your email');
+      return;
+    }
+
+    setDeducting(true);
+    try {
+      await api.post(`/admin/agents/${userId}/wallet/deduct`, {
+        amount: parsedAmount,
+        note: note.trim() || undefined,
+        adminOtp,
+      });
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to deduct from wallet');
+    } finally {
+      setDeducting(false);
+    }
+  };
+
   const handleReconcile = async () => {
     if (!paystackRef.trim()) {
       setError('Enter the Paystack reference from the payment receipt');
       return;
     }
-    if (!/^\d{6}$/.test(adminOtp)) {
+    if (!otpOk) {
       setError('Enter the 6-digit verification code from your email');
       return;
     }
@@ -87,7 +123,7 @@ export default function AdminAgentTopUpModal({
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div>
-            <h2 className="font-semibold text-gray-900">Top up agent wallet</h2>
+            <h2 className="font-semibold text-gray-900">Adjust agent wallet</h2>
             <p className="text-sm text-gray-500">{fullName}</p>
             <p className="text-xs text-gray-400 mt-0.5">Current balance: GHS {currentBalance.toFixed(2)}</p>
           </div>
@@ -98,7 +134,7 @@ export default function AdminAgentTopUpModal({
 
         <form onSubmit={handleTopUp} className="p-5 space-y-4">
           <Input
-            label="Amount to add (GHS)"
+            label="Amount (GHS)"
             type="number"
             min="0.01"
             step="0.01"
@@ -110,16 +146,25 @@ export default function AdminAgentTopUpModal({
             label="Note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. MoMo deposit received, manual credit"
+            placeholder="e.g. MoMo deposit received, or deposit reversal"
             rows={2}
           />
           <AdminPasswordConfirm value={adminOtp} onChange={setAdminOtp} autoSendOnMount />
           <FormAlert message={error} />
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={onClose} disabled={submitting || reconciling}>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
-            <Button type="submit" loading={submitting} disabled={submitting || reconciling}>
+            <Button
+              type="button"
+              variant="danger"
+              loading={deducting}
+              disabled={busy || !amountOk}
+              onClick={handleDeduct}
+            >
+              Deduct
+            </Button>
+            <Button type="submit" loading={submitting} disabled={busy || !amountOk}>
               Add to wallet
             </Button>
           </div>
@@ -138,7 +183,7 @@ export default function AdminAgentTopUpModal({
             variant="outline"
             className="w-full"
             loading={reconciling}
-            disabled={submitting || reconciling || !paystackRef.trim()}
+            disabled={busy || !paystackRef.trim()}
             onClick={handleReconcile}
           >
             Credit from Paystack reference

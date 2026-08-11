@@ -88,27 +88,26 @@ export interface CreateOrderInput {
   orderNumber?: string;
 }
 
+/** Datamax still expects name/card/location — use safe placeholders when the form only collects phone. */
+const AFA_PLACEHOLDER_NAME = 'AFA Customer';
+const AFA_PLACEHOLDER_CARD = 'GHA-000000000-0';
+const AFA_PLACEHOLDER_LOCATION = 'Ghana';
+
 export function validateAfaDetails(details: CreateOrderInput['afaDetails']): IAfaDetails {
   if (!details) {
     throw new AppError('AFA registration details are required');
   }
-  const fullName = String(details.fullName || '').trim();
-  const location = String(details.location || '').trim();
   const phone = normalizeGhanaPhone(details.phone);
-  const ghanaCard = normalizeGhanaCard(String(details.ghanaCard || ''));
-
-  if (!fullName || fullName.length < 2) {
-    throw new AppError('Full name is required');
-  }
   if (!isValidGhanaPhone(phone)) {
     throw new AppError('Phone must be 10 digits starting with 0');
   }
-  if (!isValidGhanaCard(ghanaCard)) {
-    throw new AppError('Ghana Card must match format GHA-123456789-0');
-  }
-  if (!location) {
-    throw new AppError('Location is required');
-  }
+
+  const fullName = String(details.fullName || '').trim() || AFA_PLACEHOLDER_NAME;
+  const location = String(details.location || '').trim() || AFA_PLACEHOLDER_LOCATION;
+  const rawCard = String(details.ghanaCard || '').trim();
+  const ghanaCard = rawCard && isValidGhanaCard(normalizeGhanaCard(rawCard))
+    ? normalizeGhanaCard(rawCard)
+    : AFA_PLACEHOLDER_CARD;
 
   return {
     fullName,
@@ -202,6 +201,9 @@ export const createOrder = async (input: CreateOrderInput) => {
     await assertCheckerInStock(checkerType);
   } else if (isAfa) {
     await assertAfaInStock();
+    if ((input.source === 'agent' || input.source === 'agent_api') && !input.customerEmail?.trim()) {
+      throw new AppError('Email is required for AFA registration');
+    }
     afaDetails = validateAfaDetails(
       input.afaDetails ?? {
         fullName: '',

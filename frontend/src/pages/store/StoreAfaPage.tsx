@@ -9,7 +9,7 @@ import { runValidators, v } from '@/lib/form-validation';
 import { redirectToPaystack } from '@/lib/paystack';
 import { formatCurrency } from '@/lib/utils';
 import { buildStoreHomePath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
-import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS, formatGhanaCardInput, isValidGhanaCard } from '@/lib/afa';
+import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '@/lib/afa';
 interface AfaOffer {
   packageId: string;
   price: number;
@@ -33,10 +33,7 @@ export default function StoreAfaPage() {
   const [store, setStore] = useState<Record<string, string> | null>(null);
   const [offer, setOffer] = useState<AfaOffer | null>(null);
   const [offerLoading, setOfferLoading] = useState(true);
-  const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [ghanaCard, setGhanaCard] = useState('');
-  const [location, setLocation] = useState('');
   const [email, setEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -58,17 +55,12 @@ export default function StoreAfaPage() {
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors = runValidators(
-      { fullName, phone, email, location },
+      { phone, email },
       {
-        fullName: [v.required('Full name')],
         phone: [v.required('Phone'), v.phone],
         email: [v.required('Email'), v.email],
-        location: [v.required('Location')],
       }
     );
-    if (!isValidGhanaCard(ghanaCard)) {
-      errors.ghanaCard = 'Use format GHA-123456789-0';
-    }
     setFieldErrors(errors);
     if (Object.keys(errors).length || !offer?.packageId) return;
 
@@ -78,9 +70,6 @@ export default function StoreAfaPage() {
         packageId: offer.packageId,
         recipientPhone: phone,
         email,
-        fullName: fullName.trim(),
-        ghanaCard: ghanaCard.trim().toUpperCase(),
-        location: location.trim(),
       });
       redirectToPaystack(res.data.data.authorizationUrl);
     } catch (err) {
@@ -129,42 +118,23 @@ export default function StoreAfaPage() {
             </p>
 
             <Input
-              label="Full Name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              error={fieldErrors.fullName}
-              disabled={!offer?.inStock}
-            />
-            <Input
-              label="Phone"
+              label="Beneficiary Phone Number"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="0XXXXXXXXX"
+              placeholder="enter number here (0598104488)"
               error={fieldErrors.phone}
               disabled={!offer?.inStock}
+              required
             />
             <Input
-              label="Ghana Card (GHA-#########-#)"
-              value={ghanaCard}
-              onChange={(e) => setGhanaCard(formatGhanaCardInput(e.target.value))}
-              placeholder="GHA-123456789-0"
-              error={fieldErrors.ghanaCard}
-              disabled={!offer?.inStock}
-            />
-            <Input
-              label="Location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              error={fieldErrors.location}
-              disabled={!offer?.inStock}
-            />
-            <Input
-              label="Email (for receipt)"
+              label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="enter email here"
               error={fieldErrors.email}
               disabled={!offer?.inStock}
+              required
             />
 
             {offerLoading ? (

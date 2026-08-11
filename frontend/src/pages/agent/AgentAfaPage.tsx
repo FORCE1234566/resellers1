@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { formatCurrency } from '@/lib/utils';
 import { useNavigate } from 'react-router';
-import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS, formatGhanaCardInput, isValidGhanaCard } from '@/lib/afa';
+import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '@/lib/afa';
 import { runValidators, v } from '@/lib/form-validation';
 
 interface AfaInfo {
@@ -22,10 +22,8 @@ export default function AgentAfaPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [info, setInfo] = useState<AfaInfo | null>(null);
-  const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [ghanaCard, setGhanaCard] = useState('');
-  const [location, setLocation] = useState('');
+  const [email, setEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -42,16 +40,12 @@ export default function AgentAfaPage() {
 
   const handleSubmit = async () => {
     const errors = runValidators(
-      { fullName, phone, ghanaCard, location },
+      { phone, email },
       {
-        fullName: [v.required('Full name')],
         phone: [v.required('Phone'), v.phone],
-        location: [v.required('Location')],
+        email: [v.required('Email'), v.email],
       }
     );
-    if (!isValidGhanaCard(ghanaCard)) {
-      errors.ghanaCard = 'Use format GHA-123456789-0';
-    }
     setFieldErrors(errors);
     if (Object.keys(errors).length) return;
 
@@ -59,16 +53,12 @@ export default function AgentAfaPage() {
     setMsg('');
     try {
       const res = await api.post('/agent/afa/register', {
-        fullName: fullName.trim(),
         phone,
-        ghanaCard: ghanaCard.trim().toUpperCase(),
-        location: location.trim(),
+        email: email.trim().toLowerCase(),
       });
       setMsg(res.data.data.message || `Order ${res.data.data.orderId} submitted successfully.`);
-      setFullName('');
       setPhone('');
-      setGhanaCard('');
-      setLocation('');
+      setEmail('');
       api.get('/agent/afa').then((r) => setInfo(r.data.data as AfaInfo));
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Registration failed');
@@ -114,34 +104,23 @@ export default function AgentAfaPage() {
           </p>
 
           <Input
-            label="Full Name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            error={fieldErrors.fullName}
-            disabled={!info?.inStock}
-          />
-          <Input
-            label="Phone"
+            label="Beneficiary Phone Number"
             value={phone}
             onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            placeholder="0XXXXXXXXX"
+            placeholder="enter number here (0598104488)"
             error={fieldErrors.phone}
             disabled={!info?.inStock}
+            required
           />
           <Input
-            label="Ghana Card (GHA-#########-#)"
-            value={ghanaCard}
-            onChange={(e) => setGhanaCard(formatGhanaCardInput(e.target.value))}
-            placeholder="GHA-123456789-0"
-            error={fieldErrors.ghanaCard}
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="enter email here"
+            error={fieldErrors.email}
             disabled={!info?.inStock}
-          />
-          <Input
-            label="Location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            error={fieldErrors.location}
-            disabled={!info?.inStock}
+            required
           />
 
           {msg && (

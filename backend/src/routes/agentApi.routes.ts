@@ -110,13 +110,15 @@ router.get('/afa', asyncHandler(async (req: AgentApiRequest, res) => {
 }));
 
 router.post('/afa/register', blockClientPricing, asyncHandler(async (req: AgentApiRequest, res) => {
-  const { fullName, phone, ghanaCard, location, occupation } = req.body;
+  const { phone, email, fullName, ghanaCard, location, occupation } = req.body;
+  if (!email || !String(email).trim()) throw new AppError('Email is required');
   const pkg = await getAfaPackage();
   if (!pkg) throw new AppError('AFA registration is not available', 503);
 
   const order = await createOrder({
     packageId: pkg._id.toString(),
     afaDetails: { fullName, phone, ghanaCard, location, occupation },
+    customerEmail: String(email).trim().toLowerCase(),
     agentId: req.user!._id.toString(),
     source: 'agent_api',
   });

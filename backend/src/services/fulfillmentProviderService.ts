@@ -729,7 +729,7 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
           providerStatus: SUBMITTED_FOR_VERIFICATION,
           stepLabel: 'Submitted for Verification',
           stepMessage:
-            'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). SMS sent to the recipient.',
+            'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). Email notification sent.',
         };
       }
     }
@@ -1042,7 +1042,7 @@ export async function sendVerificationEmailsForAgedPendingOrders(limit = 50): Pr
       providerStatus: SUBMITTED_FOR_VERIFICATION,
       stepLabel: 'Submitted for Verification',
       stepMessage:
-        'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). SMS sent to the recipient.',
+        'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). Email notification sent.',
     });
     emailed++;
     if (emailed >= limit) break;
@@ -1185,6 +1185,8 @@ function collectWebhookRefs(payload: Record<string, unknown>): string[] {
     payload.order_id,
     payload.orderNumber,
     payload.order_number,
+    payload.order_reference,
+    payload.orderReference,
     payload.external_reference,
     payload.externalOrderId,
     payload.client_reference,
@@ -1192,8 +1194,11 @@ function collectWebhookRefs(payload: Record<string, unknown>): string[] {
     payload.provider_reference,
     payload.api_reference,
     payload.order_api_reference,
+    payload.order_api_ref,
     payload.batch_id,
     payload.batchId,
+    payload.transaction_id,
+    payload.transactionId,
     payload.id,
   ]
     .map((v) => String(v || '').trim())
@@ -1207,10 +1212,12 @@ function collectWebhookRefs(payload: Record<string, unknown>): string[] {
       'id',
       'order_number',
       'orderNumber',
+      'order_reference',
       'order_api_reference',
       'order_api_ref',
       'reference',
       'batch_id',
+      'external_reference',
     ]) {
       const value = String(line[key] || '').trim();
       if (value) refs.push(value);
@@ -1220,6 +1227,25 @@ function collectWebhookRefs(payload: Record<string, unknown>): string[] {
   return [...new Set(refs)];
 }
 
+function phoneVariants(raw: string): string[] {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (digits.length < 9) return [];
+  const out = new Set<string>([digits]);
+  if (digits.startsWith('233') && digits.length >= 12) {
+    out.add(`0${digits.slice(3)}`);
+    out.add(digits.slice(3));
+  }
+  if (digits.startsWith('0') && digits.length === 10) {
+    out.add(`233${digits.slice(1)}`);
+    out.add(digits.slice(1));
+  }
+  if (!digits.startsWith('0') && !digits.startsWith('233') && digits.length === 9) {
+    out.add(`0${digits}`);
+    out.add(`233${digits}`);
+  }
+  return [...out];
+}
+
 function collectWebhookPhones(payload: Record<string, unknown>): string[] {
   const phones = [
     payload.phone_number,
@@ -1227,17 +1253,23 @@ function collectWebhookPhones(payload: Record<string, unknown>): string[] {
     payload._beneficiary_number,
     payload.recipientPhone,
     payload.phone,
+    payload.msisdn,
+    payload.customer_phone,
   ]
-    .map((v) => String(v || '').replace(/\D/g, ''))
-    .filter((p) => p.length >= 9);
+    .flatMap((v) => phoneVariants(String(v || '')));
 
   const orders = Array.isArray(payload.orders) ? payload.orders : [];
   for (const raw of orders) {
     const line = asWebhookRecord(raw);
     if (!line) continue;
-    for (const key of ['phone_number', 'beneficiary_number', '_beneficiary_number', 'phone']) {
-      const phone = String(line[key] || '').replace(/\D/g, '');
-      if (phone.length >= 9) phones.push(phone);
+    for (const key of [
+      'phone_number',
+      'beneficiary_number',
+      '_beneficiary_number',
+      'phone',
+      'msisdn',
+    ]) {
+      phones.push(...phoneVariants(String(line[key] || '')));
     }
   }
 
@@ -1250,7 +1282,13 @@ function extractWebhookStatus(payload: Record<string, unknown>): string {
     .filter((line): line is Record<string, unknown> => Boolean(line))
     .map((line) => ({
       status: String(
-        line.status || line.order_status || line.delivery_status || line.newStatus || ''
+        line.status ||
+          line.order_status ||
+          line.delivery_status ||
+          line.transaction_status ||
+          line.newStatus ||
+          line.new_status ||
+          ''
       ).trim(),
       phone_number: String(
         line.phone_number || line.beneficiary_number || line._beneficiary_number || line.phone || ''
@@ -1263,8 +1301,10 @@ function extractWebhookStatus(payload: Record<string, unknown>): string {
       payload.status ||
         payload.order_status ||
         payload.delivery_status ||
+        payload.transaction_status ||
         payload.newStatus ||
         payload.new_status ||
+        payload.state ||
         ''
     ).trim(),
     orders,
@@ -1303,22 +1343,26 @@ async function findOrderForWebhook(payload: Record<string, unknown>): Promise<IO
   return null;
 }
 
+/** Summarize an inbound SDH/fulfillment webhook for admin inbox / debugging. */
+export function summarizeFulfillmentWebhookPayload(body: Record<string, unknown>) {
+  const payload = unwrapWebhookBody(body);
+  return {
+    keys: Object.keys(payload).slice(0, 30),
+    refs: collectWebhookRefs(payload).slice(0, 10),
+    phones: collectWebhookPhones(payload).slice(0, 5),
+    status: extractWebhookStatus(payload) || undefined,
+  };
+}
+
 export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
   const payload = unwrapWebhookBody(body);
-  console.log(
-    '[fulfillment webhook] received',
-    JSON.stringify({
-      keys: Object.keys(payload),
-      refs: collectWebhookRefs(payload).slice(0, 8),
-      phones: collectWebhookPhones(payload).slice(0, 3),
-      status: extractWebhookStatus(payload),
-    })
-  );
+  const summary = summarizeFulfillmentWebhookPayload(body);
+  console.log('[fulfillment webhook] received', JSON.stringify(summary));
 
   const order = await findOrderForWebhook(payload);
   if (!order) throw new Error('Order not found');
 
-  const rawStatus = extractWebhookStatus(payload);
+  const rawStatus = summary.status || '';
   if (!rawStatus) {
     console.warn('[fulfillment webhook] no status in payload for', order.orderId);
     return order;
@@ -1368,7 +1412,7 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
           providerStatus: SUBMITTED_FOR_VERIFICATION,
           stepLabel: 'Submitted for Verification',
           stepMessage:
-            'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). SMS sent to the recipient.',
+            'Number still pending after 3 hours — submitted for MTN verification (24–144 hours). Email notification sent.',
         };
       }
     }

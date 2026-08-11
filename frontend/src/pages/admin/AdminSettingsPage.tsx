@@ -28,6 +28,17 @@ type FulfillmentSettings = {
     datamax: { configured: boolean; apiUrl: string };
   };
   webhookUrl: string;
+  webhookUrls?: string[];
+  recentWebhooks?: Array<{
+    at: string;
+    matched: boolean;
+    orderId?: string | null;
+    status?: string;
+    note?: string;
+    preview?: string;
+    refs?: string[];
+    phones?: string[];
+  }>;
 };
 
 const FULFILLMENT_NETWORKS: { id: FulfillmentNetwork; label: string }[] = [
@@ -134,6 +145,12 @@ function normalizeFulfillment(data: Partial<FulfillmentSettings> & Record<string
     enabled: Boolean(data.enabled),
     defaultProvider: data.defaultProvider === 'datamax' ? 'datamax' : 'smartdatahub',
     webhookUrl: String(data.webhookUrl || ''),
+    webhookUrls: Array.isArray(data.webhookUrls)
+      ? data.webhookUrls.map((u) => String(u))
+      : undefined,
+    recentWebhooks: Array.isArray(data.recentWebhooks)
+      ? (data.recentWebhooks as FulfillmentSettings['recentWebhooks'])
+      : undefined,
     providers: {
       smartdatahub: {
         configured: Boolean(providers?.smartdatahub?.configured ?? legacyApiConfigured),
@@ -700,7 +717,34 @@ export default function AdminSettingsPage() {
                     Datamax: {fulfillment.providers.datamax.apiUrl}
                     {fulfillment.providers.datamax.configured ? ' (configured)' : ' (not configured)'}
                   </p>
-                  <p>Webhook: {fulfillment.webhookUrl}</p>
+                  <p className="font-medium text-gray-700 pt-1">Webhook URL (paste into Smart Data Hub):</p>
+                  <p className="text-sky-700 select-all">{fulfillment.webhookUrl}</p>
+                  {(fulfillment.webhookUrls || []).slice(1).map((url) => (
+                    <p key={url} className="text-gray-400 select-all">
+                      Alt: {url}
+                    </p>
+                  ))}
+                  {fulfillment.recentWebhooks && fulfillment.recentWebhooks.length > 0 && (
+                    <div className="mt-3 pt-2 border-t border-gray-100 space-y-1">
+                      <p className="font-medium text-gray-700">Recent webhook deliveries</p>
+                      {fulfillment.recentWebhooks.slice(0, 5).map((w, i) => (
+                        <div key={`${w.at}-${i}`} className={w.matched ? 'text-emerald-700' : 'text-amber-700'}>
+                          <p>
+                            {new Date(w.at).toLocaleString()} —{' '}
+                            {w.matched
+                              ? `matched ${w.orderId || ''} (${w.status || 'updated'})`
+                              : w.note || 'received (unmatched / test)'}
+                          </p>
+                          {!w.matched && (w.refs?.length || w.phones?.length) ? (
+                            <p className="text-gray-400 pl-1">
+                              refs: {(w.refs || []).join(', ') || '—'} · phones:{' '}
+                              {(w.phones || []).join(', ') || '—'}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}

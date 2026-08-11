@@ -325,7 +325,7 @@ export default function AdminAgentsPage() {
                         </ActionChip>
 
                         <ActionChip
-                          title="Top up wallet"
+                          title="Adjust wallet (add or deduct)"
                           active
                           activeTone="emerald"
                           disabled={busy}
@@ -338,7 +338,7 @@ export default function AdminAgentsPage() {
                           }
                         >
                           <Wallet className="w-3 h-3" />
-                          Top up
+                          Wallet
                         </ActionChip>
 
                         <ActionChip

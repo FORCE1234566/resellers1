@@ -66,6 +66,19 @@ export interface ISetting extends Document {
   authSettings?: IAuthSettings;
   referralSettings: IReferralSettings;
   fulfillmentSettings: IFulfillmentSettings;
+  /** Recent Smart Data Hub / fulfillment webhook deliveries (debug). */
+  fulfillmentWebhookInbox?: Array<{
+    at: string;
+    path?: string;
+    matched: boolean;
+    orderId?: string | null;
+    status?: string;
+    refs: string[];
+    phones: string[];
+    keys: string[];
+    preview: string;
+    note?: string;
+  }>;
   serviceImages: IServiceImage[];
   updatedAt: Date;
 }
@@ -121,6 +134,20 @@ const settingSchema = new Schema<ISetting>(
       },
       afaRouting: { type: String, enum: ['default', 'datamax', 'off'], default: 'datamax' },
     },
+    fulfillmentWebhookInbox: [
+      {
+        at: String,
+        path: String,
+        matched: Boolean,
+        orderId: String,
+        status: String,
+        refs: [String],
+        phones: [String],
+        keys: [String],
+        preview: String,
+        note: String,
+      },
+    ],
     serviceImages: [
       {
         network: {

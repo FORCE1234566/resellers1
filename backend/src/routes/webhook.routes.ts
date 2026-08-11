@@ -20,6 +20,14 @@ router.get(
 
 router.get('/fulfillment', asyncHandler(handleFulfillmentWebhookHealth));
 router.get('/smartdatahub', asyncHandler(handleFulfillmentWebhookHealth));
+router.head('/smartdatahub', asyncHandler(handleFulfillmentWebhookHealth));
+router.head('/fulfillment', asyncHandler(handleFulfillmentWebhookHealth));
+router.options('/smartdatahub', (_req, res) => {
+  res.status(204).end();
+});
+router.options('/fulfillment', (_req, res) => {
+  res.status(204).end();
+});
 
 export const paystackWebhookMiddleware = [
   paystackIpAllowlist,
@@ -30,19 +38,8 @@ export const paystackWebhookMiddleware = [
 
 export const fulfillmentWebhookMiddleware = [
   webhookLimiter,
-  // Accept common SDH content types (some send text/plain or charset suffixes).
-  express.raw({
-    type: (req) => {
-      const ct = String(req.headers['content-type'] || '').toLowerCase();
-      return (
-        !ct ||
-        ct.includes('json') ||
-        ct.includes('text/plain') ||
-        ct.includes('octet-stream')
-      );
-    },
-    limit: '512kb',
-  }),
+  // Always buffer the body — SDH may send json, text/plain, form, or odd content-types.
+  express.raw({ type: () => true, limit: '512kb' }),
   asyncHandler(handleFulfillmentWebhookRoute),
 ];
 

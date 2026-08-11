@@ -4,10 +4,13 @@ import { verifyPayment, verifyWebhookSignature } from '../utils/paystack';
 import { processPaystackSuccess } from '../services/paymentFulfillmentService';
 import { handlePaystackTransferEvent } from '../services/paystackTransferService';
 import { env } from '../config/env';
+import { isSmartDataHubConfigured } from '../services/smartDataHubClient';
 import {
   handleFulfillmentWebhook,
+  summarizeFulfillmentWebhookPayload,
   verifyFulfillmentWebhookSignature,
 } from '../services/fulfillmentProviderService';
+import { recordFulfillmentWebhookDelivery } from '../services/fulfillmentWebhookInbox';
 import { logSecurityEvent } from '../services/securityAuditService';
 import { verifyPaystackChargeBeforeFulfillment } from '../services/paystackVerificationService';
 import { assertTrustedWebhookSource } from '../middleware/paystackIpAllowlist';
@@ -22,11 +25,42 @@ function rawPayload(req: Request): string {
   return JSON.stringify(req.body ?? {});
 }
 
+function parseFulfillmentBody(payload: string): Record<string, unknown> {
+  const trimmed = (payload || '').trim();
+  if (!trimmed) return {};
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return { value: parsed };
+  } catch {
+    // form-urlencoded fallback (SDH sometimes posts this)
+    if (trimmed.includes('=')) {
+      const params = new URLSearchParams(trimmed);
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of params.entries()) out[k] = v;
+      if (Object.keys(out).length) return out;
+    }
+    return { raw: trimmed.slice(0, 500) };
+  }
+}
+
 function isFulfillmentPing(body: Record<string, unknown>): boolean {
   if (!body || Object.keys(body).length === 0) return true;
   if (body.test === true || body.ping === true) return true;
   const event = String(body.event || body.type || '').toLowerCase();
   return event === 'ping' || event === 'test' || event === 'webhook.test';
+}
+
+function webhookAck(extra: Record<string, unknown> = {}) {
+  return {
+    success: true,
+    status: 'ok',
+    message: 'Webhook received',
+    ...extra,
+  };
 }
 
 export async function handlePaystackWebhook(req: Request, res: Response): Promise<void> {
@@ -105,55 +139,93 @@ export async function handleFulfillmentWebhookRoute(req: Request, res: Response)
     req.headers['authorization']
   ) as string | undefined;
   const payload = rawPayload(req);
+  const path = req.path || '/api/webhooks/smartdatahub';
 
   // Soft-check signature: never hard-fail SDH deliveries (they disable the hook on 4xx).
   if (signature && !verifyFulfillmentWebhookSignature(payload, signature)) {
     console.warn('[fulfillment webhook] signature mismatch — continuing (SDH delivery)');
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = JSON.parse(payload || '{}') as Record<string, unknown>;
-  } catch {
-    // SDH sometimes posts empty / non-JSON on "Test Webhook"
-    res.status(200).json({ success: true, message: 'Webhook endpoint ready' });
-    return;
-  }
+  const body = parseFulfillmentBody(payload || '{}');
+  const summary = summarizeFulfillmentWebhookPayload(body);
 
   if (isFulfillmentPing(body)) {
-    res.status(200).json({ success: true, message: 'Webhook endpoint ready' });
+    void recordFulfillmentWebhookDelivery({
+      at: new Date().toISOString(),
+      path,
+      matched: false,
+      refs: summary.refs,
+      phones: summary.phones,
+      keys: summary.keys,
+      preview: payload.slice(0, 400) || '{}',
+      note: 'ping/test',
+      status: 'ping',
+    });
+    res.status(200).json(webhookAck({ message: 'Webhook endpoint ready' }));
     return;
   }
 
   try {
     const order = await handleFulfillmentWebhook(body);
-    res.status(200).json({
-      success: true,
-      data: {
-        orderId: order.orderId,
-        status: order.status,
-        providerStatus: order.providerStatus,
-      },
+    void recordFulfillmentWebhookDelivery({
+      at: new Date().toISOString(),
+      path,
+      matched: true,
+      orderId: order.orderId,
+      status: order.status,
+      refs: summary.refs,
+      phones: summary.phones,
+      keys: summary.keys,
+      preview: payload.slice(0, 400),
+      note: 'matched',
     });
+    res.status(200).json(
+      webhookAck({
+        data: {
+          orderId: order.orderId,
+          status: order.status,
+          providerStatus: order.providerStatus,
+        },
+        matched: true,
+      })
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Webhook handling failed';
-    console.error('[fulfillment webhook]', message, JSON.stringify(body).slice(0, 500));
-    // Always 200 + success so Smart Data Hub keeps the webhook enabled.
-    res.status(200).json({
-      success: true,
-      message: /not found|missing order reference/i.test(message)
-        ? 'Webhook received (order not matched yet)'
-        : 'Webhook received',
+    console.error('[fulfillment webhook]', message, payload.slice(0, 500));
+    void recordFulfillmentWebhookDelivery({
+      at: new Date().toISOString(),
+      path,
       matched: false,
+      refs: summary.refs,
+      phones: summary.phones,
+      keys: summary.keys,
+      preview: payload.slice(0, 400),
+      note: message,
+      status: summary.status || 'unmatched',
     });
+    // Always 200 + success so Smart Data Hub keeps the webhook enabled.
+    res.status(200).json(
+      webhookAck({
+        message: /not found|missing order reference/i.test(message)
+          ? 'Webhook received (order not matched yet)'
+          : 'Webhook received',
+        matched: false,
+      })
+    );
   }
 }
 
 export async function handleFulfillmentWebhookHealth(_req: Request, res: Response): Promise<void> {
   res.status(200).json({
     success: true,
+    status: 'ok',
     message: 'Smart Data Hub delivery webhook is ready',
     path: '/api/webhooks/smartdatahub',
+    apiConfigured: isSmartDataHubConfigured(),
+    urls: [
+      `${env.apiUrl}/api/webhooks/smartdatahub`,
+      `${env.apiUrl}/api/webhooks/fulfillment`,
+    ],
   });
 }
 

@@ -496,13 +496,10 @@ Headers:
             <EndpointDoc
               method="POST"
               path="/afa/register"
-              description="Submit an MTN AFA registration. Your wallet is debited the agent fee. Ghana Card format: GHA-123456789-0. Phone must be 10 digits starting with 0."
+              description="Submit an MTN AFA registration. Your wallet is debited the agent fee. Requires beneficiary phone (10 digits starting with 0) and email."
               request={`{
-  "fullName": "John Doe",
   "phone": "0241234567",
-  "ghanaCard": "GHA-123456789-0",
-  "location": "Accra",
-  "occupation": "Farmer"
+  "email": "customer@example.com"
 }`}
               response={`// HTTP 201
 {

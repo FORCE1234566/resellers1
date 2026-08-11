@@ -78,7 +78,7 @@ import {
   serializeAgentApiStatus,
 } from '../services/agentApiApprovalService';
 import { adminSearch, buildOrderSearchFilter } from '../services/adminSearchService';
-import { creditWallet } from '../services/walletService';
+import { creditWallet, debitWallet } from '../services/walletService';
 import { getResellerPoolSummary, resellerProfitRange } from '../services/resellerProfitService';
 import { getAdminDashboardStats } from '../services/adminDashboardService';
 import { getNetworkStockList, setNetworkStock } from '../services/networkStockService';
@@ -272,6 +272,36 @@ router.post('/agents/:id/wallet/top-up', requireAdminOtp, asyncHandler(async (re
   res.json({
     success: true,
     message: `GHS ${amount} added to agent wallet`,
+    data: { balance: wallet.balance },
+  });
+}));
+
+router.post('/agents/:id/wallet/deduct', requireAdminOtp, asyncHandler(async (req: AuthRequest, res) => {
+  const dealer = await User.findOne({ _id: req.params.id, role: 'agent' });
+  if (!dealer) throw new AppError('Agent not found');
+
+  const amount = parseWithdrawalAmount(req.body.amount);
+  const note = typeof req.body.note === 'string' ? req.body.note.trim() : '';
+  const description = note || 'Admin wallet deduction';
+  const reference = `admin-deduct-agent-${Date.now()}`;
+
+  const wallet = await debitWallet(dealer._id, amount, 'adjustment', description, reference, {
+    deductedBy: req.user?._id,
+    role: 'agent',
+    source: 'admin_manual',
+  });
+
+  await createNotification(
+    dealer._id,
+    'wallet_funded',
+    'Wallet deduction',
+    `GHS ${amount} was deducted from your wallet by admin.${note ? ` Note: ${note}` : ''}`
+  );
+  await logAudit(req, 'wallet_deduct', 'agent', dealer._id.toString(), { amount, note });
+
+  res.json({
+    success: true,
+    message: `GHS ${amount} deducted from agent wallet`,
     data: { balance: wallet.balance },
   });
 }));
@@ -1393,15 +1423,24 @@ function buildFulfillmentSettingsPayload(settings: Awaited<ReturnType<typeof get
         apiUrl: env.datamax.apiUrl || 'https://datamax.site/wp-json/api/v1',
       },
     },
-    webhookUrl: `${env.apiUrl}/api/webhooks/fulfillment`,
+    webhookUrl: `${env.apiUrl}/api/webhooks/smartdatahub`,
+    webhookUrls: [
+      `${env.apiUrl}/api/webhooks/smartdatahub`,
+      `${env.apiUrl}/api/webhooks/fulfillment`,
+    ],
   };
 }
 
 router.get('/settings/fulfillment', asyncHandler(async (_req, res) => {
   const settings = await getSettings();
+  const { getFulfillmentWebhookInbox } = await import('../services/fulfillmentWebhookInbox');
+  const inbox = await getFulfillmentWebhookInbox();
   res.json({
     success: true,
-    data: buildFulfillmentSettingsPayload(settings),
+    data: {
+      ...buildFulfillmentSettingsPayload(settings),
+      recentWebhooks: inbox.slice(0, 10),
+    },
   });
 }));
 
