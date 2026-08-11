@@ -61,7 +61,7 @@ function effectiveApiCost(
   if (provider === 'smartdatahub' && pkg.smartDataHubCostPrice != null) {
     return pkg.smartDataHubCostPrice;
   }
-  if (pkg.network === 'MTN' && provider === 'datamax' && pkg.datamaxCostPrice != null) {
+  if (provider === 'datamax' && pkg.datamaxCostPrice != null) {
     return pkg.datamaxCostPrice;
   }
   return draftCostPrice;

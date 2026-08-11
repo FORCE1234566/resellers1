@@ -25,6 +25,8 @@ import {
   getSmartDataHubMtnCost,
   getSmartDataHubTelecelCost,
   getSmartDataHubAirtelTigoCost,
+  getDatamaxTelecelCost,
+  DATAMAX_TELECEL_COSTS,
 } from '../config/datamaxPrices';
 
 const networks = ['MTN', 'Telecel', 'AirtelTigo'] as const;
@@ -51,6 +53,9 @@ const bundles = [
   '150GB',
 ];
 
+/** Telecel catalog currently offered by Datamax — only these stay enabled. */
+const TELECEL_AVAILABLE_BUNDLES = new Set(Object.keys(DATAMAX_TELECEL_COSTS));
+
 const bundlePrices: Record<string, number> = {
   '1GB': 4.5,
   '2GB': 9.0,
@@ -72,13 +77,13 @@ function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-/** Prefer Smart Data Hub API costs for the editable package costPrice. */
+/** Prefer live API costs for the editable package costPrice. Telecel uses Datamax. */
 function apiCostFor(network: string, bundle: string): number | null {
   if (network === 'MTN') {
     return getSmartDataHubMtnCost(bundle) ?? bundlePrices[bundle] ?? null;
   }
   if (network === 'Telecel') {
-    return getSmartDataHubTelecelCost(bundle) ?? null;
+    return getDatamaxTelecelCost(bundle) ?? getSmartDataHubTelecelCost(bundle) ?? null;
   }
   if (network === 'AirtelTigo') {
     return getSmartDataHubAirtelTigoCost(bundle) ?? null;
@@ -271,6 +276,13 @@ export const ensureNetworkPackages = async () => {
           exists.costPrice = base;
           changed = true;
         }
+        if (network === 'Telecel') {
+          const shouldEnable = TELECEL_AVAILABLE_BUNDLES.has(bundle);
+          if (exists.isEnabled !== shouldEnable) {
+            exists.isEnabled = shouldEnable;
+            changed = true;
+          }
+        }
         if (changed) {
           await exists.save();
           updated++;
@@ -286,16 +298,30 @@ export const ensureNetworkPackages = async () => {
         agentPrice: round(base * 1.05),
         resellerBasePrice: round(base * 1.1),
         maxSellingPrice: round(base * 1.22),
-        isEnabled: true,
+        isEnabled: network === 'Telecel' ? TELECEL_AVAILABLE_BUNDLES.has(bundle) : true,
         sortOrder: sortOrder++,
       });
       created++;
     }
   }
 
+  // Disable any leftover Telecel data packages not in the current Datamax catalog.
+  const disabledTelecel = await Package.updateMany(
+    {
+      network: 'Telecel',
+      productType: { $ne: 'afa' },
+      bundleSize: { $nin: [...TELECEL_AVAILABLE_BUNDLES] },
+      isEnabled: true,
+    },
+    { $set: { isEnabled: false } }
+  );
+  if (disabledTelecel.modifiedCount > 0) {
+    updated += disabledTelecel.modifiedCount;
+  }
+
   if (created > 0 || updated > 0) {
     console.log(
-      `Packages synced from Smart Data Hub costs: ${created} created, ${updated} cost prices updated`
+      `Packages synced from API costs: ${created} created, ${updated} cost/availability updates`
     );
   }
 };

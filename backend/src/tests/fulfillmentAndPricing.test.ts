@@ -131,35 +131,51 @@ test('mapNetworkToProviderCode maps Telecel to vodafone for Smart Data Hub', () 
   assert.equal(mapNetworkToProviderCode('AirtelTigo'), 'at');
 });
 
-test('getSmartDataHubTelecelCost returns SDH Telecel/Vodafone API prices', () => {
-  assert.equal(getSmartDataHubTelecelCost('10GB'), 38.0);
-  assert.equal(getSmartDataHubTelecelCost('35GB'), 134.0);
-  assert.equal(getSmartDataHubTelecelCost('50GB'), 193.0);
-  assert.equal(getSmartDataHubTelecelCost('100GB'), 355.0);
-  assert.equal(getSmartDataHubTelecelCost('150GB'), 535.0);
+test('getSmartDataHubTelecelCost / getDatamaxTelecelCost return current Telecel API prices', () => {
+  assert.equal(getSmartDataHubTelecelCost('10GB'), 37.0);
+  assert.equal(getSmartDataHubTelecelCost('15GB'), 53.0);
+  assert.equal(getSmartDataHubTelecelCost('20GB'), 73.0);
+  assert.equal(getSmartDataHubTelecelCost('30GB'), 107.0);
+  assert.equal(getSmartDataHubTelecelCost('40GB'), 142.0);
+  assert.equal(getSmartDataHubTelecelCost('50GB'), 177.0);
+  assert.equal(getSmartDataHubTelecelCost('35GB'), null);
+  assert.equal(getSmartDataHubTelecelCost('100GB'), null);
   assert.equal(getSmartDataHubTelecelCost('1GB'), null);
 });
 
-test('resolveOrderApiCost uses Smart Data Hub Telecel costs', () => {
+test('resolveOrderApiCost uses Datamax Telecel costs when Telecel is routed to Datamax', () => {
   assert.equal(
     resolveOrderApiCost({
       network: 'Telecel',
-      bundleSize: '25GB',
+      bundleSize: '10GB',
       costPrice: 1,
-      fulfillmentProvider: 'smartdatahub',
+      fulfillmentProvider: 'datamax',
       isAfa: false,
     }),
-    96.0
+    37.0
   );
   assert.equal(
     resolveOrderApiCost({
       network: 'Telecel',
-      bundleSize: '100GB',
+      bundleSize: '50GB',
+      costPrice: 1,
+      fulfillmentProvider: 'datamax',
+      isAfa: false,
+    }),
+    177.0
+  );
+});
+
+test('resolveOrderApiCost uses Smart Data Hub Telecel costs when routed to SDH', () => {
+  assert.equal(
+    resolveOrderApiCost({
+      network: 'Telecel',
+      bundleSize: '20GB',
       costPrice: 1,
       fulfillmentProvider: 'smartdatahub',
       isAfa: false,
     }),
-    355.0
+    73.0
   );
 });
 

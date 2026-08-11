@@ -38,19 +38,19 @@ export const SMART_DATA_HUB_MTN_COSTS: Record<string, number> = {
   '50GB': 192.5,
 };
 
-/** Smart Data Hub Telecel (Vodafone) API cost prices — GHS */
+/** Datamax Telecel API cost prices — GHS (current Datamax Telecel catalog) */
+export const DATAMAX_TELECEL_COSTS: Record<string, number> = {
+  '10GB': 37.0,
+  '15GB': 53.0,
+  '20GB': 73.0,
+  '30GB': 107.0,
+  '40GB': 142.0,
+  '50GB': 177.0,
+};
+
+/** Smart Data Hub Telecel (Vodafone) API cost prices — GHS (aligned with current Telecel catalog) */
 export const SMART_DATA_HUB_TELECEL_COSTS: Record<string, number> = {
-  '10GB': 38.0,
-  '15GB': 56.0,
-  '20GB': 76.0,
-  '25GB': 96.0,
-  '30GB': 112.0,
-  '35GB': 134.0,
-  '40GB': 151.0,
-  '45GB': 173.0,
-  '50GB': 193.0,
-  '100GB': 355.0,
-  '150GB': 535.0,
+  ...DATAMAX_TELECEL_COSTS,
 };
 
 /** Smart Data Hub AirtelTigo Ishare API cost prices — GHS */
@@ -77,6 +77,11 @@ export function normalizeBundleSizeKey(bundleSize: string): string {
 export function getDatamaxMtnExpressCost(bundleSize: string): number | null {
   const key = normalizeBundleSizeKey(bundleSize);
   return DATAMAX_MTN_EXPRESS_COSTS[key] ?? null;
+}
+
+export function getDatamaxTelecelCost(bundleSize: string): number | null {
+  const key = normalizeBundleSizeKey(bundleSize);
+  return DATAMAX_TELECEL_COSTS[key] ?? null;
 }
 
 export function getSmartDataHubMtnCost(bundleSize: string): number | null {
@@ -120,6 +125,9 @@ export function resolveOrderApiCost(input: {
   }
   if (input.fulfillmentProvider === 'datamax' && input.network === 'MTN') {
     return getDatamaxMtnExpressCost(input.bundleSize) ?? input.costPrice;
+  }
+  if (input.fulfillmentProvider === 'datamax' && input.network === 'Telecel') {
+    return getDatamaxTelecelCost(input.bundleSize) ?? input.costPrice;
   }
   return input.costPrice;
 }

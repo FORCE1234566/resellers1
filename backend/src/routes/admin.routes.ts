@@ -15,6 +15,7 @@ import { AuditLog } from '../models/AuditLog';
 import { Setting } from '../models/Setting';
 import {
   getDatamaxMtnExpressCost,
+  getDatamaxTelecelCost,
   getSmartDataHubMtnCost,
   getSmartDataHubTelecelCost,
   getSmartDataHubAirtelTigoCost,
@@ -665,7 +666,10 @@ router.get('/packages', asyncHandler(async (_req, res) => {
         }
       : {}),
     ...(pkg.network === 'Telecel'
-      ? { smartDataHubCostPrice: getSmartDataHubTelecelCost(pkg.bundleSize) }
+      ? {
+          datamaxCostPrice: getDatamaxTelecelCost(pkg.bundleSize),
+          smartDataHubCostPrice: getSmartDataHubTelecelCost(pkg.bundleSize),
+        }
       : {}),
     ...(pkg.network === 'AirtelTigo'
       ? { smartDataHubCostPrice: getSmartDataHubAirtelTigoCost(pkg.bundleSize) }
