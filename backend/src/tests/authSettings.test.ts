@@ -29,68 +29,31 @@ test.beforeEach(async () => {
   await User.deleteMany({});
 });
 
-test('isRoleEmailOtpEnabled defaults to true when authSettings missing', async () => {
+test('isRoleEmailOtpEnabled defaults to false when authSettings missing', async () => {
   await Setting.create({ complaintSettings: { globalEnabled: true, networkSettings: {}, userOverrides: {} } });
-  assert.equal(await isRoleEmailOtpEnabled('reseller'), true);
-  assert.equal(await isRoleEmailOtpEnabled('agent'), true);
+  assert.equal(await isRoleEmailOtpEnabled('reseller'), false);
+  assert.equal(await isRoleEmailOtpEnabled('agent'), false);
 });
 
-test('isRoleEmailOtpEnabled respects stored toggles', async () => {
+test('isRoleEmailOtpEnabled turns off stored agent/reseller login OTP', async () => {
   await Setting.create({
     authSettings: { resellerEmailOtpEnabled: false, agentEmailOtpEnabled: true },
     complaintSettings: { globalEnabled: true, networkSettings: {}, userOverrides: {} },
   });
   assert.equal(await isRoleEmailOtpEnabled('reseller'), false);
-  assert.equal(await isRoleEmailOtpEnabled('agent'), true);
+  assert.equal(await isRoleEmailOtpEnabled('agent'), false);
 });
 
-test('shouldSkipEmailOtpForUser skips when reseller OTP disabled globally', async () => {
+test('shouldSkipEmailOtpForUser always skips agent and reseller login OTP', async () => {
   await Setting.create({
-    authSettings: { resellerEmailOtpEnabled: false, agentEmailOtpEnabled: true },
+    authSettings: { resellerEmailOtpEnabled: true, agentEmailOtpEnabled: true },
     complaintSettings: { globalEnabled: true, networkSettings: {}, userOverrides: {} },
   });
   assert.equal(await shouldSkipEmailOtpForUser({ role: 'reseller' }), true);
-  assert.equal(await shouldSkipEmailOtpForUser({ role: 'agent' }), false);
-});
-
-test('shouldSkipEmailOtpForUser skips when global on but user emailOtpEnabled is false', async () => {
-  await Setting.create({
-    authSettings: { resellerEmailOtpEnabled: true, agentEmailOtpEnabled: true },
-    complaintSettings: { globalEnabled: true, networkSettings: {}, userOverrides: {} },
-  });
-  assert.equal(
-    await shouldSkipEmailOtpForUser({ role: 'reseller', emailOtpEnabled: false }),
-    true
-  );
-  assert.equal(
-    await shouldSkipEmailOtpForUser({ role: 'agent', emailOtpEnabled: false }),
-    true
-  );
-});
-
-test('shouldSkipEmailOtpForUser requires OTP when global and user both enabled', async () => {
-  await Setting.create({
-    authSettings: { resellerEmailOtpEnabled: true, agentEmailOtpEnabled: true },
-    complaintSettings: { globalEnabled: true, networkSettings: {}, userOverrides: {} },
-  });
-  assert.equal(await shouldSkipEmailOtpForUser({ role: 'reseller', emailOtpEnabled: true }), false);
-  assert.equal(await shouldSkipEmailOtpForUser({ role: 'reseller' }), false);
-  assert.equal(await shouldSkipEmailOtpForUser({ role: 'agent', emailOtpEnabled: true }), false);
-});
-
-test('shouldSkipEmailOtpForUser skips when global off even if user emailOtpEnabled is true', async () => {
-  await Setting.create({
-    authSettings: { resellerEmailOtpEnabled: false, agentEmailOtpEnabled: false },
-    complaintSettings: { globalEnabled: true, networkSettings: {}, userOverrides: {} },
-  });
-  assert.equal(
-    await shouldSkipEmailOtpForUser({ role: 'reseller', emailOtpEnabled: true }),
-    true
-  );
-  assert.equal(
-    await shouldSkipEmailOtpForUser({ role: 'agent', emailOtpEnabled: true }),
-    true
-  );
+  assert.equal(await shouldSkipEmailOtpForUser({ role: 'agent' }), true);
+  assert.equal(await shouldSkipEmailOtpForUser({ role: 'reseller', emailOtpEnabled: true }), true);
+  assert.equal(await shouldSkipEmailOtpForUser({ role: 'agent', emailOtpEnabled: true }), true);
+  assert.equal(await shouldSkipEmailOtpForUser({ role: 'admin' }), false);
 });
 
 test('createResellerAccount creates active reseller with store and wallet', async () => {

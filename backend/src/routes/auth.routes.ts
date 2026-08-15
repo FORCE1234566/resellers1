@@ -21,7 +21,7 @@ import {
   roleRequiresMfa,
   verifyTotpCode,
 } from '../services/totpService';
-import { sendAuthOtpOrFail, verifyOtpOrThrow, AGENT_LOGIN_OTP_EMAIL } from '../utils/otp';
+import { sendAuthOtpOrFail, verifyOtpOrThrow } from '../utils/otp';
 import { signAccessToken } from '../utils/jwt';
 import { EmailDeliveryError, sendPasswordResetEmail } from '../utils/email';
 import { getCanonicalFrontendUrl } from '../config/urls';
@@ -460,18 +460,13 @@ router.post(
     }
 
     const prefersTotp = prefersTotpLogin(user);
-    const isAgentLogin =
-      role === 'agent' ||
-      user.role === 'agent' ||
-      (user.role as string) === 'dealer';
-    const otpDeliveryOpts = isAgentLogin ? { deliverToEmail: AGENT_LOGIN_OTP_EMAIL } : {};
     let delivery = { emailSent: false, smsSent: false };
     if (!prefersTotp) {
-      delivery = await sendAuthOtpOrFail(normalizedEmail, otpDeliveryOpts);
+      delivery = await sendAuthOtpOrFail(normalizedEmail);
     } else if (roleRequiresMfa(user.role)) {
       // Still try email backup so agent/reseller can use inbox OTP if authenticator fails.
       try {
-        delivery = await sendAuthOtpOrFail(normalizedEmail, otpDeliveryOpts);
+        delivery = await sendAuthOtpOrFail(normalizedEmail);
       } catch (err) {
         console.error(
           '[Login backup OTP delivery failed]',
@@ -485,9 +480,7 @@ router.post(
       success: true,
       message: prefersTotp
         ? 'Enter your authenticator code, or use the email OTP backup'
-        : isAgentLogin
-          ? 'OTP sent — enter the code from the admin verification inbox'
-          : 'OTP sent to your email',
+        : 'OTP sent to your email',
       data: {
         email: user.email,
         role: user.role,
@@ -682,17 +675,10 @@ router.post(
       return;
     }
 
-    const isAgentUser =
-      user.role === 'agent' || (user.role as string) === 'dealer';
-    const delivery = await sendAuthOtpOrFail(
-      normalizedEmail,
-      isAgentUser ? { deliverToEmail: AGENT_LOGIN_OTP_EMAIL } : {}
-    );
+    const delivery = await sendAuthOtpOrFail(normalizedEmail);
     res.json({
       success: true,
-      message: isAgentUser
-        ? 'A new code was sent to the admin verification inbox.'
-        : 'A new code was sent to your email.',
+      message: 'A new code was sent to your email.',
       data: delivery,
     });
   })

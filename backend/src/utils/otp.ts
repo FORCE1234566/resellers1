@@ -3,9 +3,6 @@ import { Otp } from '../models/Otp';
 import { EmailDeliveryError, sendOtpEmail } from './email';
 import { AppError } from '../middleware/errorHandler';
 
-/** Agent login OTP is delivered only to this inbox (not the agent's own email). */
-export const AGENT_LOGIN_OTP_EMAIL = 'waeccheckers@gmail.com';
-
 export const generateOtpCode = (): string => {
   return crypto.randomInt(100000, 1000000).toString();
 };
@@ -18,10 +15,7 @@ export type OtpDeliveryResult = {
 type OtpSendOptions = {
   /** Wait for email delivery (use on login/resend so failures surface to the user). */
   waitForDelivery?: boolean;
-  /**
-   * Override inbox that receives the OTP email (OTP is still stored under `email` for verify).
-   * Used for agent login → waeccheckers@gmail.com.
-   */
+  /** Override inbox that receives the OTP email (OTP is still stored under `email` for verify). */
   deliverToEmail?: string | null;
 };
 

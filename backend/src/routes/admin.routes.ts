@@ -1340,7 +1340,7 @@ router.put('/settings', requireAdminOtp, asyncHandler(async (req: AuthRequest, r
       throw new AppError('resellerEmailOtpEnabled must be true or false');
     }
     if (!settings.authSettings) {
-      settings.authSettings = { resellerEmailOtpEnabled: true, agentEmailOtpEnabled: true };
+      settings.authSettings = { resellerEmailOtpEnabled: false, agentEmailOtpEnabled: false };
     }
     settings.authSettings.resellerEmailOtpEnabled = resellerEmailOtpEnabled;
     settings.markModified('authSettings');
@@ -1351,7 +1351,7 @@ router.put('/settings', requireAdminOtp, asyncHandler(async (req: AuthRequest, r
       throw new AppError('agentEmailOtpEnabled must be true or false');
     }
     if (!settings.authSettings) {
-      settings.authSettings = { resellerEmailOtpEnabled: true, agentEmailOtpEnabled: true };
+      settings.authSettings = { resellerEmailOtpEnabled: false, agentEmailOtpEnabled: false };
     }
     settings.authSettings.agentEmailOtpEnabled = agentEmailOtpEnabled;
     settings.markModified('authSettings');

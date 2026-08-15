@@ -47,16 +47,16 @@ const defaultComplaintSettings = () => ({
 });
 
 const defaultAuthSettings = (): IAuthSettings => ({
-  resellerEmailOtpEnabled: true,
-  agentEmailOtpEnabled: true,
+  resellerEmailOtpEnabled: false,
+  agentEmailOtpEnabled: false,
 });
 
 export async function isRoleEmailOtpEnabled(role: 'reseller' | 'agent'): Promise<boolean> {
   const settings = await getSettings();
   if (role === 'reseller') {
-    return settings.authSettings?.resellerEmailOtpEnabled !== false;
+    return settings.authSettings?.resellerEmailOtpEnabled === true;
   }
-  return settings.authSettings?.agentEmailOtpEnabled !== false;
+  return settings.authSettings?.agentEmailOtpEnabled === true;
 }
 
 export async function shouldSkipEmailOtpForUser(user: {
@@ -64,15 +64,12 @@ export async function shouldSkipEmailOtpForUser(user: {
   emailOtpEnabled?: boolean | null;
 }): Promise<boolean> {
   if (process.env.DEV_SKIP_OTP === 'true') return true;
-  if (user.role === 'reseller') {
-    if (!(await isRoleEmailOtpEnabled('reseller'))) return true;
-  } else if (user.role === 'agent') {
-    if (!(await isRoleEmailOtpEnabled('agent'))) return true;
-  } else {
-    return false;
+  // Login OTP email is unreliable for many inboxes on production SMTP.
+  // Agents and resellers sign in with password; admin OTP is unchanged.
+  if (user.role === 'reseller' || user.role === 'agent' || user.role === 'dealer') {
+    return true;
   }
-  // Only skip when explicitly disabled. Missing/undefined/true all require OTP.
-  return user.emailOtpEnabled === false;
+  return false;
 }
 
 export function normalizeNetworkRoute(value: unknown): FulfillmentNetworkRoute {
@@ -183,6 +180,14 @@ export const getSettings = async () => {
   }
   if (!settings.authSettings) {
     settings.authSettings = defaultAuthSettings();
+    dirty = true;
+  } else if (
+    settings.authSettings.resellerEmailOtpEnabled !== false ||
+    settings.authSettings.agentEmailOtpEnabled !== false
+  ) {
+    settings.authSettings.resellerEmailOtpEnabled = false;
+    settings.authSettings.agentEmailOtpEnabled = false;
+    settings.markModified('authSettings');
     dirty = true;
   }
   if (dirty) await settings.save();

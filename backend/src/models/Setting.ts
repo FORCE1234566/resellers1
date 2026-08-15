@@ -116,8 +116,8 @@ const settingSchema = new Schema<ISetting>(
       noticeOverridesComplaints: { type: Boolean, default: false },
     },
     authSettings: {
-      resellerEmailOtpEnabled: { type: Boolean, default: true },
-      agentEmailOtpEnabled: { type: Boolean, default: true },
+      resellerEmailOtpEnabled: { type: Boolean, default: false },
+      agentEmailOtpEnabled: { type: Boolean, default: false },
     },
     referralSettings: {
       commissionType: { type: String, enum: ['fixed', 'percentage'], default: 'fixed' },
