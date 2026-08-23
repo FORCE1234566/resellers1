@@ -429,7 +429,7 @@ Headers:
   "success": true,
   "data": [
     { "network": "MTN", "inStock": true, "imageUrl": "/images/mtn.jpg" },
-    { "network": "MTN Express", "inStock": true, "imageUrl": "/images/mtn.jpg" },
+    { "network": "MTN Express", "inStock": true, "imageUrl": "/images/mtn-express.png" },
     { "network": "Telecel", "inStock": true, "imageUrl": "/images/telecel.jpg" },
     { "network": "AirtelTigo", "inStock": true, "imageUrl": "/images/airteltigo.jpg" }
   ]

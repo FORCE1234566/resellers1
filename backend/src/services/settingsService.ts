@@ -170,7 +170,7 @@ export const getSettings = async () => {
       complaintSettings: defaultComplaintSettings(),
       serviceImages: [
         { network: 'MTN', imageUrl: '/images/mtn.jpg', isAvailable: true },
-        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: false },
+        { network: 'MTN Express', imageUrl: '/images/mtn-express.png', isAvailable: false },
         { network: 'Telecel', imageUrl: '/images/telecel.jpg', isAvailable: true },
         { network: 'AirtelTigo', imageUrl: '/images/airteltigo.jpg', isAvailable: true },
       ],
@@ -223,7 +223,9 @@ export const getSettings = async () => {
             ? '/images/telecel.jpg'
             : network === 'AirtelTigo'
               ? '/images/airteltigo.jpg'
-              : '/images/mtn.jpg',
+              : network === 'MTN Express'
+                ? '/images/mtn-express.png'
+                : '/images/mtn.jpg',
         // MTN Express stays out of stock until admin enables it.
         isAvailable: network !== 'MTN Express',
       });
@@ -246,7 +248,9 @@ export const getSettings = async () => {
 
   // One-shot atomic: MTN Express OOS until admin enables (safe under concurrent reads).
   const MTN_EXPRESS_OOS_BOOTSTRAP = 'mtn-express-default-oos-v1';
-  const inbox = settings.fulfillmentWebhookInbox || [];
+  const MTN_EXPRESS_IMAGE = '/images/mtn-express.png';
+  const MTN_EXPRESS_IMAGE_BOOTSTRAP = 'mtn-express-image-v1';
+  let inbox = settings.fulfillmentWebhookInbox || [];
   const alreadyBootstrapped = inbox.some((row) => row.note === MTN_EXPRESS_OOS_BOOTSTRAP);
   if (!alreadyBootstrapped) {
     const bootstrapEntry = {
@@ -267,7 +271,10 @@ export const getSettings = async () => {
       await Setting.updateOne(
         notYetBootstrapped,
         {
-          $set: { 'serviceImages.$[ex].isAvailable': false },
+          $set: {
+            'serviceImages.$[ex].isAvailable': false,
+            'serviceImages.$[ex].imageUrl': MTN_EXPRESS_IMAGE,
+          },
           $push: { fulfillmentWebhookInbox: { $each: [bootstrapEntry], $slice: -50 } },
         },
         { arrayFilters: [{ 'ex.network': 'MTN Express' }] }
@@ -277,10 +284,54 @@ export const getSettings = async () => {
         $push: {
           serviceImages: {
             network: 'MTN Express',
-            imageUrl: '/images/mtn.jpg',
+            imageUrl: MTN_EXPRESS_IMAGE,
             isAvailable: false,
           },
           fulfillmentWebhookInbox: { $each: [bootstrapEntry], $slice: -50 },
+        },
+      });
+    }
+    const reloaded = await Setting.findById(settings._id);
+    if (reloaded) {
+      settings = reloaded;
+      inbox = settings.fulfillmentWebhookInbox || [];
+    }
+  }
+
+  // One-shot: set MTN Express branding image (does not change stock).
+  if (!inbox.some((row) => row.note === MTN_EXPRESS_IMAGE_BOOTSTRAP)) {
+    const imageEntry = {
+      at: new Date().toISOString(),
+      matched: false,
+      refs: [] as string[],
+      phones: [] as string[],
+      keys: [] as string[],
+      preview: 'MTN Express service image set to mtn-express.png',
+      note: MTN_EXPRESS_IMAGE_BOOTSTRAP,
+    };
+    const notYetImaged = {
+      _id: settings._id,
+      fulfillmentWebhookInbox: { $not: { $elemMatch: { note: MTN_EXPRESS_IMAGE_BOOTSTRAP } } },
+    };
+    const hasExpress = settings.serviceImages.some((s) => s.network === 'MTN Express');
+    if (hasExpress) {
+      await Setting.updateOne(
+        notYetImaged,
+        {
+          $set: { 'serviceImages.$[ex].imageUrl': MTN_EXPRESS_IMAGE },
+          $push: { fulfillmentWebhookInbox: { $each: [imageEntry], $slice: -50 } },
+        },
+        { arrayFilters: [{ 'ex.network': 'MTN Express' }] }
+      );
+    } else {
+      await Setting.updateOne(notYetImaged, {
+        $push: {
+          serviceImages: {
+            network: 'MTN Express',
+            imageUrl: MTN_EXPRESS_IMAGE,
+            isAvailable: false,
+          },
+          fulfillmentWebhookInbox: { $each: [imageEntry], $slice: -50 },
         },
       });
     }

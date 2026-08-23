@@ -12,7 +12,7 @@ import WhatsAppFloat from '@/components/ui/WhatsAppFloat';
 import { ADMIN_SUPPORT_DISPLAY, ADMIN_SUPPORT_PHONE } from '@/lib/support-contact';
 import { api } from '@/lib/api';
 
-const NETWORKS = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+const NETWORKS = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
 
 type PlatformServices = {
   networks: Array<{ network: string; inStock: boolean }>;
@@ -46,7 +46,7 @@ export default function HomePage() {
                 Fastest and safest way to sell data bundles in Ghana
               </h1>
               <p className="text-lg text-gray-400 mb-8 max-w-lg leading-relaxed">
-                Launch your own white-label store. Sell MTN, Telecel and AirtelTigo bundles with instant delivery and secure Paystack payments.
+                Launch your own white-label store. Sell MTN, MTN Express, Telecel and AirtelTigo bundles with instant delivery and secure Paystack payments.
               </p>
 
               <ul className="space-y-3 mb-10">

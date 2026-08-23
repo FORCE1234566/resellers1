@@ -6,7 +6,7 @@ export const STOCK_NETWORKS: Network[] = ['MTN', 'MTN Express', 'Telecel', 'Airt
 
 const defaultImage: Record<Network, string> = {
   MTN: '/images/mtn.jpg',
-  'MTN Express': '/images/mtn.jpg',
+  'MTN Express': '/images/mtn-express.png',
   Telecel: '/images/telecel.jpg',
   AirtelTigo: '/images/airteltigo.jpg',
 };
