@@ -65,7 +65,7 @@ export function isSmartDataHubConfigured(): boolean {
 export async function smartDataHubRequest<T>(
   method: 'GET' | 'POST',
   relativePath: string,
-  options?: { body?: unknown; idempotencyKey?: string }
+  options?: { body?: unknown; idempotencyKey?: string; timeoutMs?: number }
 ): Promise<T> {
   if (!env.fulfillment.apiKey || !env.fulfillment.apiSecret) {
     throw new SmartDataHubError('Smart Data Hub API credentials not configured', 0);
@@ -96,7 +96,7 @@ export async function smartDataHubRequest<T>(
     headers,
     data: bodyStr || undefined,
     transformRequest: [(data) => data],
-    timeout: 25000,
+    timeout: options?.timeoutMs ?? 25000,
     validateStatus: () => true,
   });
 
@@ -258,7 +258,10 @@ type VerifyAttempt =
 
 async function attemptVerifyPath(relativePath: string, body: Record<string, string>): Promise<VerifyAttempt> {
   try {
-    const res = await smartDataHubRequest<unknown>('POST', relativePath, { body });
+    const res = await smartDataHubRequest<unknown>('POST', relativePath, {
+      body,
+      timeoutMs: 8000,
+    });
     const verified = parseVerifiedFlag(res);
     if (verified === true) {
       return { kind: 'verified', raw: res };
