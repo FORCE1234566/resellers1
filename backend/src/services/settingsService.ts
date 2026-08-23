@@ -231,40 +231,61 @@ export const getSettings = async () => {
     }
   }
 
-  // One-shot: put MTN Express out of stock on first run after Express launch (admin can re-enable).
+  if (dirty) {
+    settings.markModified('serviceImages');
+    try {
+      await settings.save();
+    } catch (err: unknown) {
+      // Concurrent getSettings migrations — reload and continue.
+      const name = err && typeof err === 'object' && 'name' in err ? String((err as { name: string }).name) : '';
+      if (name !== 'VersionError') throw err;
+      const fresh = await Setting.findOne();
+      if (fresh) settings = fresh;
+    }
+  }
+
+  // One-shot atomic: MTN Express OOS until admin enables (safe under concurrent reads).
   const MTN_EXPRESS_OOS_BOOTSTRAP = 'mtn-express-default-oos-v1';
   const inbox = settings.fulfillmentWebhookInbox || [];
   const alreadyBootstrapped = inbox.some((row) => row.note === MTN_EXPRESS_OOS_BOOTSTRAP);
   if (!alreadyBootstrapped) {
-    const expressIdx = settings.serviceImages.findIndex((s) => s.network === 'MTN Express');
-    if (expressIdx >= 0) {
-      settings.serviceImages[expressIdx].isAvailable = false;
+    const bootstrapEntry = {
+      at: new Date().toISOString(),
+      matched: false,
+      refs: [] as string[],
+      phones: [] as string[],
+      keys: [] as string[],
+      preview: 'MTN Express defaulted to out of stock until admin enables it',
+      note: MTN_EXPRESS_OOS_BOOTSTRAP,
+    };
+    const notYetBootstrapped = {
+      _id: settings._id,
+      fulfillmentWebhookInbox: { $not: { $elemMatch: { note: MTN_EXPRESS_OOS_BOOTSTRAP } } },
+    };
+    const hasExpress = settings.serviceImages.some((s) => s.network === 'MTN Express');
+    if (hasExpress) {
+      await Setting.updateOne(
+        notYetBootstrapped,
+        {
+          $set: { 'serviceImages.$[ex].isAvailable': false },
+          $push: { fulfillmentWebhookInbox: { $each: [bootstrapEntry], $slice: -50 } },
+        },
+        { arrayFilters: [{ 'ex.network': 'MTN Express' }] }
+      );
     } else {
-      settings.serviceImages.push({
-        network: 'MTN Express',
-        imageUrl: '/images/mtn.jpg',
-        isAvailable: false,
+      await Setting.updateOne(notYetBootstrapped, {
+        $push: {
+          serviceImages: {
+            network: 'MTN Express',
+            imageUrl: '/images/mtn.jpg',
+            isAvailable: false,
+          },
+          fulfillmentWebhookInbox: { $each: [bootstrapEntry], $slice: -50 },
+        },
       });
     }
-    settings.fulfillmentWebhookInbox = [
-      ...inbox.slice(-49),
-      {
-        at: new Date().toISOString(),
-        matched: false,
-        refs: [],
-        phones: [],
-        keys: [],
-        preview: 'MTN Express defaulted to out of stock until admin enables it',
-        note: MTN_EXPRESS_OOS_BOOTSTRAP,
-      },
-    ];
-    settings.markModified('fulfillmentWebhookInbox');
-    dirty = true;
-  }
-
-  if (dirty) {
-    settings.markModified('serviceImages');
-    await settings.save();
+    const reloaded = await Setting.findById(settings._id);
+    if (reloaded) settings = reloaded;
   }
 
   return settings;
