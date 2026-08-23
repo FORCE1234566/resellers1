@@ -73,13 +73,28 @@ export default function StorePurchasePage() {
         const verifyRes = await api.post(`/store/${slug}/verify-express`, {
           recipientPhone: phone,
         });
-        if (!verifyRes.data?.data?.verified) {
+        const verifyData = verifyRes.data?.data as {
+          verified?: boolean;
+          unavailable?: boolean;
+          message?: string;
+          websiteMessage?: string;
+          code?: string;
+        };
+        if (verifyData?.unavailable) {
+          alert(
+            verifyData.websiteMessage ||
+              verifyData.message ||
+              'MTN Express verification is temporarily unavailable. Please try again shortly.'
+          );
+          return;
+        }
+        if (!verifyData?.verified) {
           setExpressBlocked(true);
           setFieldErrors((prev) => ({
             ...prev,
             phone:
-              verifyRes.data?.data?.websiteMessage ||
-              verifyRes.data?.data?.message ||
+              verifyData?.websiteMessage ||
+              verifyData?.message ||
               'This number is not verified to buy MTN Express.',
           }));
           return;

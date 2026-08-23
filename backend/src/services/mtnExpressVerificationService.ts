@@ -19,6 +19,8 @@ export type MtnExpressVerifyResult = {
   fallbackNetwork?: Network;
   /** Short copy agents can show on their website. */
   websiteMessage?: string;
+  /** SDH verify API outage/misconfig — not a per-number rejection. */
+  unavailable?: boolean;
 };
 
 export function isMtnExpressNetwork(network: string | undefined | null): boolean {
@@ -48,6 +50,12 @@ export async function assertMtnExpressNumberVerified(rawPhone: string): Promise<
   }
 
   const result = await verifySmartDataHubMtnExpressNumber(phone);
+  if (result.unavailable) {
+    throw new AppError(
+      result.message || 'MTN Express verification is temporarily unavailable. Please try again shortly.',
+      503
+    );
+  }
   if (!result.verified) {
     throw new AppError(
       result.message || 'This number is not verified to buy MTN Express.',
@@ -66,6 +74,7 @@ export async function checkMtnExpressNumber(rawPhone: string): Promise<MtnExpres
     return {
       verified: false,
       phone,
+      unavailable: true,
       message: 'MTN Express verification is temporarily unavailable. Please try again shortly.',
       websiteMessage:
         'MTN Express verification is temporarily unavailable. Please try again shortly.',
@@ -73,6 +82,19 @@ export async function checkMtnExpressNumber(rawPhone: string): Promise<MtnExpres
   }
 
   const result = await verifySmartDataHubMtnExpressNumber(phone);
+  if (result.unavailable) {
+    return {
+      verified: false,
+      phone,
+      unavailable: true,
+      message:
+        result.message ||
+        'MTN Express verification is temporarily unavailable. Please try again shortly.',
+      websiteMessage:
+        result.message ||
+        'MTN Express verification is temporarily unavailable. Please try again shortly.',
+    };
+  }
   if (!result.verified) {
     return notVerifiedPayload(phone, result.message);
   }

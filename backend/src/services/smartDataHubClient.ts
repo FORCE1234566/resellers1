@@ -179,6 +179,8 @@ export type SmartDataHubVerifyResult = {
   verified: boolean;
   raw?: unknown;
   message?: string;
+  /** True when SDH verify API failed (auth/outage), not a number rejection. */
+  unavailable?: boolean;
 };
 
 function parseVerifiedFlag(payload: unknown): boolean | null {
@@ -186,6 +188,7 @@ function parseVerifiedFlag(payload: unknown): boolean | null {
   if (typeof payload === 'boolean') return payload;
   if (typeof payload !== 'object') return null;
   const obj = payload as Record<string, unknown>;
+  const data = obj.data as Record<string, unknown> | undefined;
   const candidates = [
     obj.verified,
     obj.is_verified,
@@ -194,23 +197,27 @@ function parseVerifiedFlag(payload: unknown): boolean | null {
     obj.can_buy,
     obj.canBuy,
     obj.status,
-    (obj.data as Record<string, unknown> | undefined)?.verified,
-    (obj.data as Record<string, unknown> | undefined)?.is_verified,
-    (obj.data as Record<string, unknown> | undefined)?.isVerified,
-    (obj.data as Record<string, unknown> | undefined)?.eligible,
-    (obj.data as Record<string, unknown> | undefined)?.can_buy,
-    (obj.data as Record<string, unknown> | undefined)?.canBuy,
-    (obj.data as Record<string, unknown> | undefined)?.status,
+    data?.verified,
+    data?.is_verified,
+    data?.isVerified,
+    data?.eligible,
+    data?.can_buy,
+    data?.canBuy,
+    data?.status,
   ];
   for (const value of candidates) {
     if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') {
+      if (value === 1) return true;
+      if (value === 0) return false;
+    }
     if (typeof value === 'string') {
       const normalized = value.trim().toLowerCase();
-      if (['verified', 'active', 'eligible', 'ok', 'success', 'true', 'approved'].includes(normalized)) {
+      if (['verified', 'active', 'eligible', 'ok', 'success', 'true', 'approved', 'yes'].includes(normalized)) {
         return true;
       }
       if (
-        ['unverified', 'not_verified', 'not-verified', 'inactive', 'ineligible', 'rejected', 'false'].includes(
+        ['unverified', 'not_verified', 'not-verified', 'inactive', 'ineligible', 'rejected', 'false', 'no'].includes(
           normalized
         )
       ) {
@@ -218,18 +225,78 @@ function parseVerifiedFlag(payload: unknown): boolean | null {
       }
     }
   }
-  // Do not treat a bare success flag as verified — Express requires an explicit eligibility signal.
   return null;
+}
+
+function verifyPathCandidates(): string[] {
+  const fromEnv = (process.env.FULFILLMENT_VERIFY_PATH || '').trim();
+  const paths = [
+    fromEnv,
+    '/verify-number',
+    '/numbers/verify',
+    '/beneficiary/verify',
+    '/mtn-express/verify',
+    '/express/verify-number',
+  ].filter(Boolean) as string[];
+  return [...new Set(paths)];
+}
+
+type VerifyAttempt =
+  | { kind: 'verified'; raw: unknown }
+  | { kind: 'rejected'; message: string; raw?: unknown }
+  | { kind: 'missing'; statusCode: number }
+  | { kind: 'unavailable'; message: string; statusCode: number };
+
+async function attemptVerifyPath(relativePath: string, body: Record<string, string>): Promise<VerifyAttempt> {
+  try {
+    const res = await smartDataHubRequest<unknown>('POST', relativePath, { body });
+    const verified = parseVerifiedFlag(res);
+    if (verified === true) {
+      return { kind: 'verified', raw: res };
+    }
+    return {
+      kind: 'rejected',
+      message: 'This number is not verified to buy MTN Express.',
+      raw: res,
+    };
+  } catch (err) {
+    if (err instanceof SmartDataHubError) {
+      if (err.statusCode === 404 || err.statusCode === 405) {
+        return { kind: 'missing', statusCode: err.statusCode };
+      }
+      if (err.statusCode === 400 || err.statusCode === 422) {
+        return {
+          kind: 'rejected',
+          message: err.message || 'This number is not verified to buy MTN Express.',
+        };
+      }
+      console.error(
+        `[SDH] MTN Express verify failed on ${relativePath}: ${err.statusCode} ${err.message}`
+      );
+      return {
+        kind: 'unavailable',
+        statusCode: err.statusCode,
+        message: 'MTN Express verification is temporarily unavailable. Please try again shortly.',
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[SDH] MTN Express verify error on ${relativePath}: ${message}`);
+    return {
+      kind: 'unavailable',
+      statusCode: 0,
+      message: 'MTN Express verification is temporarily unavailable. Please try again shortly.',
+    };
+  }
 }
 
 /**
  * Pre-purchase check for MTN Express numbers on Smart Data Hub.
- * Path override: FULFILLMENT_VERIFY_PATH (default `/verify-number`).
+ * Never throws — callers always get a structured result.
+ * Path override: FULFILLMENT_VERIFY_PATH (falls back through common SDH verify paths).
  */
 export async function verifySmartDataHubMtnExpressNumber(
   phone: string
 ): Promise<SmartDataHubVerifyResult> {
-  const relativePath = (process.env.FULFILLMENT_VERIFY_PATH || '/verify-number').trim() || '/verify-number';
   const normalizedPhone = phone.replace(/\D/g, '');
   const body = {
     phone: normalizedPhone,
@@ -239,30 +306,43 @@ export async function verifySmartDataHubMtnExpressNumber(
     network: mapNetworkToProviderCode('MTN Express'),
   };
 
-  try {
-    const res = await smartDataHubRequest<unknown>('POST', relativePath, { body });
-    const verified = parseVerifiedFlag(res);
-    // Strict: only an explicit verified/eligible flag may buy. Ambiguous SDH payloads are rejected.
-    if (verified !== true) {
+  let lastRejected: VerifyAttempt | null = null;
+
+  for (const relativePath of verifyPathCandidates()) {
+    const attempt = await attemptVerifyPath(relativePath, body);
+    if (attempt.kind === 'verified') {
+      return { verified: true, raw: attempt.raw };
+    }
+    if (attempt.kind === 'unavailable') {
       return {
         verified: false,
-        raw: res,
-        message: 'This number is not verified to buy MTN Express.',
+        unavailable: true,
+        message: attempt.message,
       };
     }
-    return { verified: true, raw: res };
-  } catch (err) {
-    if (err instanceof SmartDataHubError) {
-      if (err.statusCode === 404 || err.statusCode === 422 || err.statusCode === 400) {
-        return {
-          verified: false,
-          message: err.message || 'This number is not verified to buy MTN Express.',
-        };
-      }
-      throw err;
+    if (attempt.kind === 'missing') {
+      continue;
     }
-    throw err;
+    if (attempt.kind === 'rejected') {
+      lastRejected = attempt;
+      break;
+    }
   }
+
+  if (lastRejected?.kind === 'rejected') {
+    return {
+      verified: false,
+      message: lastRejected.message,
+      raw: lastRejected.raw,
+    };
+  }
+
+  return {
+    verified: false,
+    unavailable: true,
+    message:
+      'MTN Express verification is temporarily unavailable. Please confirm FULFILLMENT_VERIFY_PATH with Smart Data Hub.',
+  };
 }
 
 export async function fetchSmartDataHubBulkStatus(
