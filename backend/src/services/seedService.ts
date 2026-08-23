@@ -251,7 +251,7 @@ export const seedDatabase = async (): Promise<void> => {
       fulfillmentSettings: migrateFulfillmentSettings(undefined).settings,
       serviceImages: [
         { network: 'MTN', imageUrl: '/images/mtn.jpg', isAvailable: true },
-        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: true },
+        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: false },
         { network: 'Telecel', imageUrl: '/images/telecel.jpg', isAvailable: true },
         { network: 'AirtelTigo', imageUrl: '/images/airteltigo.jpg', isAvailable: true },
       ],

@@ -170,7 +170,7 @@ export const getSettings = async () => {
       complaintSettings: defaultComplaintSettings(),
       serviceImages: [
         { network: 'MTN', imageUrl: '/images/mtn.jpg', isAvailable: true },
-        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: true },
+        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: false },
         { network: 'Telecel', imageUrl: '/images/telecel.jpg', isAvailable: true },
         { network: 'AirtelTigo', imageUrl: '/images/airteltigo.jpg', isAvailable: true },
       ],
@@ -224,11 +224,44 @@ export const getSettings = async () => {
             : network === 'AirtelTigo'
               ? '/images/airteltigo.jpg'
               : '/images/mtn.jpg',
-        isAvailable: true,
+        // MTN Express stays out of stock until admin enables it.
+        isAvailable: network !== 'MTN Express',
       });
       dirty = true;
     }
   }
+
+  // One-shot: put MTN Express out of stock on first run after Express launch (admin can re-enable).
+  const MTN_EXPRESS_OOS_BOOTSTRAP = 'mtn-express-default-oos-v1';
+  const inbox = settings.fulfillmentWebhookInbox || [];
+  const alreadyBootstrapped = inbox.some((row) => row.note === MTN_EXPRESS_OOS_BOOTSTRAP);
+  if (!alreadyBootstrapped) {
+    const expressIdx = settings.serviceImages.findIndex((s) => s.network === 'MTN Express');
+    if (expressIdx >= 0) {
+      settings.serviceImages[expressIdx].isAvailable = false;
+    } else {
+      settings.serviceImages.push({
+        network: 'MTN Express',
+        imageUrl: '/images/mtn.jpg',
+        isAvailable: false,
+      });
+    }
+    settings.fulfillmentWebhookInbox = [
+      ...inbox.slice(-49),
+      {
+        at: new Date().toISOString(),
+        matched: false,
+        refs: [],
+        phones: [],
+        keys: [],
+        preview: 'MTN Express defaulted to out of stock until admin enables it',
+        note: MTN_EXPRESS_OOS_BOOTSTRAP,
+      },
+    ];
+    settings.markModified('fulfillmentWebhookInbox');
+    dirty = true;
+  }
+
   if (dirty) {
     settings.markModified('serviceImages');
     await settings.save();
