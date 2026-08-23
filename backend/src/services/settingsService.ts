@@ -233,6 +233,22 @@ export const getSettings = async () => {
     }
   }
 
+  // Collapse duplicate serviceImages rows (same network) — keep last occurrence.
+  {
+    const seen = new Set<string>();
+    const deduped: typeof settings.serviceImages = [];
+    for (let i = settings.serviceImages.length - 1; i >= 0; i--) {
+      const row = settings.serviceImages[i];
+      if (seen.has(row.network)) continue;
+      seen.add(row.network);
+      deduped.unshift(row);
+    }
+    if (deduped.length !== settings.serviceImages.length) {
+      settings.serviceImages = deduped;
+      dirty = true;
+    }
+  }
+
   if (dirty) {
     settings.markModified('serviceImages');
     try {
@@ -334,6 +350,54 @@ export const getSettings = async () => {
           fulfillmentWebhookInbox: { $each: [imageEntry], $slice: -50 },
         },
       });
+    }
+    const reloaded = await Setting.findById(settings._id);
+    if (reloaded) settings = reloaded;
+  }
+
+  // One-shot: collapse duplicate MTN Express rows; keep a single out-of-stock entry.
+  inbox = settings.fulfillmentWebhookInbox || [];
+  const MTN_EXPRESS_DEDUP_BOOTSTRAP = 'mtn-express-dedupe-oos-v1';
+  if (!inbox.some((row) => row.note === MTN_EXPRESS_DEDUP_BOOTSTRAP)) {
+    const dedupeEntry = {
+      at: new Date().toISOString(),
+      matched: false,
+      refs: [] as string[],
+      phones: [] as string[],
+      keys: [] as string[],
+      preview: 'Deduped MTN Express serviceImages; kept out of stock',
+      note: MTN_EXPRESS_DEDUP_BOOTSTRAP,
+    };
+    const expressRows = settings.serviceImages.filter((s) => s.network === 'MTN Express');
+    const withoutExpress = settings.serviceImages.filter((s) => s.network !== 'MTN Express');
+    if (expressRows.length !== 1 || expressRows[0]?.isAvailable !== false) {
+      await Setting.updateOne(
+        {
+          _id: settings._id,
+          fulfillmentWebhookInbox: { $not: { $elemMatch: { note: MTN_EXPRESS_DEDUP_BOOTSTRAP } } },
+        },
+        {
+          $set: {
+            serviceImages: [
+              ...withoutExpress,
+              {
+                network: 'MTN Express',
+                imageUrl: MTN_EXPRESS_IMAGE,
+                isAvailable: false,
+              },
+            ],
+          },
+          $push: { fulfillmentWebhookInbox: { $each: [dedupeEntry], $slice: -50 } },
+        }
+      );
+    } else {
+      await Setting.updateOne(
+        {
+          _id: settings._id,
+          fulfillmentWebhookInbox: { $not: { $elemMatch: { note: MTN_EXPRESS_DEDUP_BOOTSTRAP } } },
+        },
+        { $push: { fulfillmentWebhookInbox: { $each: [dedupeEntry], $slice: -50 } } }
+      );
     }
     const reloaded = await Setting.findById(settings._id);
     if (reloaded) settings = reloaded;

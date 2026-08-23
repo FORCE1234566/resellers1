@@ -95,9 +95,9 @@ export default function StoreHomePage() {
   const afaPath = buildStoreAfaPath(slug);
   const checkerPath = buildStoreCheckerPath(slug);
 
-  const services = (store.serviceImages || []).filter((s) =>
-    ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'].includes(s.network)
-  );
+  const services = (store.serviceImages || [])
+    .filter((s) => ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'].includes(s.network))
+    .filter((s, idx, arr) => arr.findIndex((x) => x.network === s.network) === idx);
   const afaAvailable = store.afa?.inStock ?? false;
   const checkerAvailable = store.checker?.inStock ?? false;
 
