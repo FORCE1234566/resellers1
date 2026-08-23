@@ -57,9 +57,23 @@ export const SMART_DATA_HUB_MTN_EXPRESS_BUNDLES = [
   '100GB',
 ] as const;
 
-/** SDH MTN Express costs — reuse SDH MTN ladder; 100GB disabled until cost is set. */
+/** SDH MTN Express API cost prices — GHS (from SDH Express catalog). */
 export const SMART_DATA_HUB_MTN_EXPRESS_COSTS: Record<string, number> = {
-  ...SMART_DATA_HUB_MTN_COSTS,
+  '1GB': 4.1,
+  '2GB': 8.2,
+  '3GB': 12.3,
+  '4GB': 16.4,
+  '5GB': 20.5,
+  '6GB': 24.6,
+  '8GB': 32.8,
+  '10GB': 41.0,
+  '15GB': 59.0,
+  '20GB': 79.6,
+  '25GB': 98.0,
+  '30GB': 118.4,
+  '40GB': 158.2,
+  '50GB': 200.0,
+  '100GB': 400.0,
 };
 
 /** Datamax Telecel API cost prices — GHS (current Datamax Telecel catalog) */

@@ -17,6 +17,7 @@ import {
   getDatamaxMtnExpressCost,
   getDatamaxTelecelCost,
   getSmartDataHubMtnCost,
+  getSmartDataHubMtnExpressCost,
   getSmartDataHubTelecelCost,
   getSmartDataHubAirtelTigoCost,
 } from '../config/datamaxPrices';
@@ -664,6 +665,9 @@ router.get('/packages', asyncHandler(async (_req, res) => {
           datamaxCostPrice: getDatamaxMtnExpressCost(pkg.bundleSize),
           smartDataHubCostPrice: getSmartDataHubMtnCost(pkg.bundleSize),
         }
+      : {}),
+    ...(pkg.network === 'MTN Express'
+      ? { smartDataHubCostPrice: getSmartDataHubMtnExpressCost(pkg.bundleSize) }
       : {}),
     ...(pkg.network === 'Telecel'
       ? {
