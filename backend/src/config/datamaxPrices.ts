@@ -38,6 +38,30 @@ export const SMART_DATA_HUB_MTN_COSTS: Record<string, number> = {
   '50GB': 192.5,
 };
 
+/** MTN Express catalog on Smart Data Hub (sizes offered for pre-verified numbers). */
+export const SMART_DATA_HUB_MTN_EXPRESS_BUNDLES = [
+  '1GB',
+  '2GB',
+  '3GB',
+  '4GB',
+  '5GB',
+  '6GB',
+  '8GB',
+  '10GB',
+  '15GB',
+  '20GB',
+  '25GB',
+  '30GB',
+  '40GB',
+  '50GB',
+  '100GB',
+] as const;
+
+/** SDH MTN Express costs — reuse SDH MTN ladder; 100GB disabled until cost is set. */
+export const SMART_DATA_HUB_MTN_EXPRESS_COSTS: Record<string, number> = {
+  ...SMART_DATA_HUB_MTN_COSTS,
+};
+
 /** Datamax Telecel API cost prices — GHS (current Datamax Telecel catalog) */
 export const DATAMAX_TELECEL_COSTS: Record<string, number> = {
   '10GB': 37.0,
@@ -89,6 +113,11 @@ export function getSmartDataHubMtnCost(bundleSize: string): number | null {
   return SMART_DATA_HUB_MTN_COSTS[key] ?? null;
 }
 
+export function getSmartDataHubMtnExpressCost(bundleSize: string): number | null {
+  const key = normalizeBundleSizeKey(bundleSize);
+  return SMART_DATA_HUB_MTN_EXPRESS_COSTS[key] ?? null;
+}
+
 export function getSmartDataHubTelecelCost(bundleSize: string): number | null {
   const key = normalizeBundleSizeKey(bundleSize);
   return SMART_DATA_HUB_TELECEL_COSTS[key] ?? null;
@@ -115,6 +144,9 @@ export function resolveOrderApiCost(input: {
   if (input.fulfillmentProvider === 'smartdatahub') {
     if (input.network === 'MTN') {
       return getSmartDataHubMtnCost(input.bundleSize) ?? input.costPrice;
+    }
+    if (input.network === 'MTN Express') {
+      return getSmartDataHubMtnExpressCost(input.bundleSize) ?? input.costPrice;
     }
     if (input.network === 'Telecel') {
       return getSmartDataHubTelecelCost(input.bundleSize) ?? input.costPrice;

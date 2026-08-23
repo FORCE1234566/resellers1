@@ -10,6 +10,11 @@ import { initializePayment } from '../utils/paystack';
 import { isValidGhanaPhone, roundMoney } from '../utils/helpers';
 import { assertNetworkPhone } from '../utils/phone';
 import { assertNetworkInStock } from '../services/networkStockService';
+import {
+  assertMtnExpressNumberVerified,
+  checkMtnExpressNumber,
+  isMtnExpressNetwork,
+} from '../services/mtnExpressVerificationService';
 import { assertAfaInStock, getAfaStock } from '../services/afaStockService';
 import { getAfaPackage } from '../services/afaPackageService';
 import { isAfaProduct, AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '../config/afa';
@@ -186,6 +191,25 @@ router.get('/:slug/verify', asyncHandler(async (req, res) => {
       registrationDate: reseller.createdAt,
       activeStatus: store.isActive && reseller.status === 'active' ? 'Active' : 'Inactive',
     },
+  });
+}));
+
+// Pre-purchase MTN Express number verification (Smart Data Hub)
+router.post('/:slug/verify-express', purchaseLimiter, asyncHandler(async (req, res) => {
+  const reseller = await findResellerByStoreSlug(req.params.slug, {
+    requireActiveStore: true,
+  });
+  if (!reseller) throw new AppError('Store not found', 404);
+
+  const { recipientPhone, phone } = req.body as { recipientPhone?: string; phone?: string };
+  const raw = recipientPhone || phone;
+  if (!raw) throw new AppError('Recipient phone is required');
+
+  await assertNetworkInStock('MTN Express');
+  const result = await checkMtnExpressNumber(String(raw));
+  res.json({
+    success: true,
+    data: result,
   });
 }));
 
@@ -489,6 +513,9 @@ router.post('/:slug/purchase/init', purchaseLimiter, blockStorePricing, asyncHan
     if (!recipientPhone) throw new AppError('Recipient phone is required');
     phone = assertNetworkPhone(recipientPhone, pkg.network);
     await assertNetworkInStock(pkg.network);
+    if (isMtnExpressNetwork(pkg.network)) {
+      phone = await assertMtnExpressNumberVerified(phone);
+    }
   }
 
   const pkgIdStr = pkg._id.toString();

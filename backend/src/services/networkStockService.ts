@@ -2,10 +2,11 @@ import { Network } from '../models/Package';
 import { AppError } from '../middleware/errorHandler';
 import { getSettings } from './settingsService';
 
-export const STOCK_NETWORKS: Network[] = ['MTN', 'Telecel', 'AirtelTigo'];
+export const STOCK_NETWORKS: Network[] = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'];
 
 const defaultImage: Record<Network, string> = {
   MTN: '/images/mtn.jpg',
+  'MTN Express': '/images/mtn.jpg',
   Telecel: '/images/telecel.jpg',
   AirtelTigo: '/images/airteltigo.jpg',
 };

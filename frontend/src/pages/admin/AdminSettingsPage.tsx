@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import AdminPasswordConfirm from '@/components/admin/AdminPasswordConfirm';
 import { getApiHostname } from '@/lib/deploy';
 
-type FulfillmentNetwork = 'MTN' | 'Telecel' | 'AirtelTigo';
+type FulfillmentNetwork = 'MTN' | 'MTN Express' | 'Telecel' | 'AirtelTigo';
 type FulfillmentProvider = 'smartdatahub' | 'datamax';
 type FulfillmentNetworkRoute = 'default' | FulfillmentProvider | 'off';
 type AfaFulfillmentRoute = 'default' | 'datamax' | 'off';
@@ -43,6 +43,7 @@ type FulfillmentSettings = {
 
 const FULFILLMENT_NETWORKS: { id: FulfillmentNetwork; label: string }[] = [
   { id: 'MTN', label: 'MTN' },
+  { id: 'MTN Express', label: 'MTN Express' },
   { id: 'Telecel', label: 'Telecel' },
   { id: 'AirtelTigo', label: 'AirtelTigo' },
 ];
@@ -91,7 +92,7 @@ const AFA_ROUTE_OPTIONS: { value: AfaFulfillmentRoute; label: string }[] = [
 const defaultFulfillment: FulfillmentSettings = {
   enabled: false,
   defaultProvider: 'smartdatahub',
-  networkRouting: { MTN: 'off', Telecel: 'datamax', AirtelTigo: 'off' },
+  networkRouting: { MTN: 'off', 'MTN Express': 'smartdatahub', Telecel: 'datamax', AirtelTigo: 'off' },
   afaRouting: 'datamax',
   providers: {
     smartdatahub: { configured: false, apiUrl: 'https://smartdatahubgh.com/api/v1' },
@@ -163,6 +164,7 @@ function normalizeFulfillment(data: Partial<FulfillmentSettings> & Record<string
     },
     networkRouting: {
       MTN: normalizeNetworkRoute(data.networkRouting?.MTN),
+      'MTN Express': normalizeNetworkRoute(data.networkRouting?.['MTN Express'] ?? 'smartdatahub'),
       Telecel: normalizeNetworkRoute(data.networkRouting?.Telecel),
       AirtelTigo: normalizeNetworkRoute(data.networkRouting?.AirtelTigo),
     },

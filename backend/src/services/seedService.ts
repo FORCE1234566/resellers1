@@ -23,13 +23,15 @@ import {
 import { safeStartupStep } from './startupService';
 import {
   getSmartDataHubMtnCost,
+  getSmartDataHubMtnExpressCost,
   getSmartDataHubTelecelCost,
   getSmartDataHubAirtelTigoCost,
   getDatamaxTelecelCost,
   DATAMAX_TELECEL_COSTS,
+  SMART_DATA_HUB_MTN_EXPRESS_BUNDLES,
 } from '../config/datamaxPrices';
 
-const networks = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+const networks = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
 const bundles = [
   '1GB',
   '2GB',
@@ -55,6 +57,7 @@ const bundles = [
 
 /** Telecel catalog currently offered by Datamax — only these stay enabled. */
 const TELECEL_AVAILABLE_BUNDLES = new Set(Object.keys(DATAMAX_TELECEL_COSTS));
+const MTN_EXPRESS_AVAILABLE_BUNDLES = new Set<string>(SMART_DATA_HUB_MTN_EXPRESS_BUNDLES);
 
 const bundlePrices: Record<string, number> = {
   '1GB': 4.5,
@@ -81,6 +84,9 @@ function round(n: number) {
 function apiCostFor(network: string, bundle: string): number | null {
   if (network === 'MTN') {
     return getSmartDataHubMtnCost(bundle) ?? bundlePrices[bundle] ?? null;
+  }
+  if (network === 'MTN Express') {
+    return getSmartDataHubMtnExpressCost(bundle);
   }
   if (network === 'Telecel') {
     return getDatamaxTelecelCost(bundle) ?? getSmartDataHubTelecelCost(bundle) ?? null;
@@ -122,6 +128,7 @@ export const seedDatabase = async (): Promise<void> => {
 
   const networkImageMap: Record<string, string> = {
     MTN: '/images/mtn.jpg',
+    'MTN Express': '/images/mtn.jpg',
     Telecel: '/images/telecel.jpg',
     AirtelTigo: '/images/airteltigo.jpg',
   };
@@ -244,6 +251,7 @@ export const seedDatabase = async (): Promise<void> => {
       fulfillmentSettings: migrateFulfillmentSettings(undefined).settings,
       serviceImages: [
         { network: 'MTN', imageUrl: '/images/mtn.jpg', isAvailable: true },
+        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: true },
         { network: 'Telecel', imageUrl: '/images/telecel.jpg', isAvailable: true },
         { network: 'AirtelTigo', imageUrl: '/images/airteltigo.jpg', isAvailable: true },
       ],
@@ -283,6 +291,13 @@ export const ensureNetworkPackages = async () => {
             changed = true;
           }
         }
+        if (network === 'MTN Express') {
+          const shouldEnable = MTN_EXPRESS_AVAILABLE_BUNDLES.has(bundle);
+          if (exists.isEnabled !== shouldEnable) {
+            exists.isEnabled = shouldEnable;
+            changed = true;
+          }
+        }
         if (changed) {
           await exists.save();
           updated++;
@@ -298,7 +313,12 @@ export const ensureNetworkPackages = async () => {
         agentPrice: round(base * 1.05),
         resellerBasePrice: round(base * 1.1),
         maxSellingPrice: round(base * 1.22),
-        isEnabled: network === 'Telecel' ? TELECEL_AVAILABLE_BUNDLES.has(bundle) : true,
+        isEnabled:
+          network === 'Telecel'
+            ? TELECEL_AVAILABLE_BUNDLES.has(bundle)
+            : network === 'MTN Express'
+              ? MTN_EXPRESS_AVAILABLE_BUNDLES.has(bundle)
+              : true,
         sortOrder: sortOrder++,
       });
       created++;
@@ -317,6 +337,19 @@ export const ensureNetworkPackages = async () => {
   );
   if (disabledTelecel.modifiedCount > 0) {
     updated += disabledTelecel.modifiedCount;
+  }
+
+  const disabledExpress = await Package.updateMany(
+    {
+      network: 'MTN Express',
+      productType: { $ne: 'afa' },
+      bundleSize: { $nin: [...MTN_EXPRESS_AVAILABLE_BUNDLES] },
+      isEnabled: true,
+    },
+    { $set: { isEnabled: false } }
+  );
+  if (disabledExpress.modifiedCount > 0) {
+    updated += disabledExpress.modifiedCount;
   }
 
   if (created > 0 || updated > 0) {

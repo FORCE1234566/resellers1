@@ -38,10 +38,11 @@ export function mapNetworkToProviderCode(network: Network | string): string {
   // Smart Data Hub expects "vodafone" for Telecel (former Vodafone Ghana).
   const map: Record<string, string> = {
     MTN: 'mtn',
+    'MTN Express': 'mtn_express',
     Telecel: 'vodafone',
     AirtelTigo: 'at',
   };
-  return map[network] || String(network).toLowerCase();
+  return map[network] || String(network).toLowerCase().replace(/\s+/g, '_');
 }
 
 export function parseBundleDataSizeGb(bundleSize: string): number {
@@ -172,6 +173,96 @@ export async function createSmartDataHubOrder(input: {
     body: payload,
     idempotencyKey: input.orderId,
   });
+}
+
+export type SmartDataHubVerifyResult = {
+  verified: boolean;
+  raw?: unknown;
+  message?: string;
+};
+
+function parseVerifiedFlag(payload: unknown): boolean | null {
+  if (payload == null) return null;
+  if (typeof payload === 'boolean') return payload;
+  if (typeof payload !== 'object') return null;
+  const obj = payload as Record<string, unknown>;
+  const candidates = [
+    obj.verified,
+    obj.is_verified,
+    obj.isVerified,
+    obj.eligible,
+    obj.can_buy,
+    obj.canBuy,
+    obj.status,
+    (obj.data as Record<string, unknown> | undefined)?.verified,
+    (obj.data as Record<string, unknown> | undefined)?.is_verified,
+    (obj.data as Record<string, unknown> | undefined)?.isVerified,
+    (obj.data as Record<string, unknown> | undefined)?.eligible,
+    (obj.data as Record<string, unknown> | undefined)?.status,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['verified', 'active', 'eligible', 'ok', 'success', 'true', 'approved'].includes(normalized)) {
+        return true;
+      }
+      if (
+        ['unverified', 'not_verified', 'not-verified', 'inactive', 'ineligible', 'rejected', 'false'].includes(
+          normalized
+        )
+      ) {
+        return false;
+      }
+    }
+  }
+  if (typeof obj.success === 'boolean' && obj.data === undefined) return obj.success;
+  return null;
+}
+
+/**
+ * Pre-purchase check for MTN Express numbers on Smart Data Hub.
+ * Path override: FULFILLMENT_VERIFY_PATH (default `/verify-number`).
+ */
+export async function verifySmartDataHubMtnExpressNumber(
+  phone: string
+): Promise<SmartDataHubVerifyResult> {
+  const relativePath = (process.env.FULFILLMENT_VERIFY_PATH || '/verify-number').trim() || '/verify-number';
+  const normalizedPhone = phone.replace(/\D/g, '');
+  const body = {
+    phone: normalizedPhone,
+    phone_number: normalizedPhone,
+    beneficiary_number: normalizedPhone,
+    _beneficiary_number: normalizedPhone,
+    network: mapNetworkToProviderCode('MTN Express'),
+  };
+
+  try {
+    const res = await smartDataHubRequest<unknown>('POST', relativePath, { body });
+    const verified = parseVerifiedFlag(res);
+    if (verified === null) {
+      // Successful HTTP with no explicit flag — treat as verified (SDH accepted the number).
+      return { verified: true, raw: res };
+    }
+    return {
+      verified,
+      raw: res,
+      message: verified
+        ? undefined
+        : 'This number is not verified to buy MTN Express.',
+    };
+  } catch (err) {
+    if (err instanceof SmartDataHubError) {
+      if (err.statusCode === 404 || err.statusCode === 422 || err.statusCode === 400) {
+        return {
+          verified: false,
+          message: err.message || 'This number is not verified to buy MTN Express.',
+        };
+      }
+      throw err;
+    }
+    throw err;
+  }
 }
 
 export async function fetchSmartDataHubBulkStatus(

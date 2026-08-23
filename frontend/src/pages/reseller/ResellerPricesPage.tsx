@@ -21,7 +21,7 @@ import {
   panelTableCellClass,
 } from '@/components/ui/PanelTable';
 
-const NETWORK_ORDER = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+const NETWORK_ORDER = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
 
 interface PackageRow {
   _id: string;
@@ -239,7 +239,7 @@ export default function ResellerPricesPage() {
         <Card className="p-8 text-center">
           <p className="text-gray-900 font-medium">No packages available yet.</p>
           <p className="text-sm text-gray-500 mt-2">
-            Ask admin to enable MTN, Telecel, and AirtelTigo packages on the platform.
+            Ask admin to enable MTN, MTN Express, Telecel, and AirtelTigo packages on the platform.
           </p>
           <Button variant="outline" className="mt-4" onClick={loadPrices}>
             Retry

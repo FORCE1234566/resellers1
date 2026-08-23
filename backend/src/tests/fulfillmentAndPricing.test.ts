@@ -29,6 +29,7 @@ const baseSettings = (): IFulfillmentSettings => ({
   defaultProvider: 'smartdatahub',
   networkRouting: {
     MTN: 'default',
+    'MTN Express': 'smartdatahub',
     Telecel: 'default',
     AirtelTigo: 'default',
   },
@@ -90,6 +91,7 @@ test('migrateFulfillmentSettings forces Telecel onto Datamax', () => {
     defaultProvider: 'smartdatahub',
     networkRouting: {
       MTN: 'smartdatahub',
+      'MTN Express': 'smartdatahub',
       Telecel: 'off',
       AirtelTigo: 'off',
     },
@@ -127,8 +129,17 @@ test('mapNetworkToDatamaxCode maps Ghana networks', () => {
 
 test('mapNetworkToProviderCode maps Telecel to vodafone for Smart Data Hub', () => {
   assert.equal(mapNetworkToProviderCode('MTN'), 'mtn');
+  assert.equal(mapNetworkToProviderCode('MTN Express'), 'mtn_express');
   assert.equal(mapNetworkToProviderCode('Telecel'), 'vodafone');
   assert.equal(mapNetworkToProviderCode('AirtelTigo'), 'at');
+});
+
+test('resolveFulfillmentProviderFromSettings forces MTN Express onto Smart Data Hub', () => {
+  const settings = baseSettings();
+  settings.networkRouting['MTN Express'] = 'off';
+  assert.equal(resolveFulfillmentProviderFromSettings(settings, 'MTN Express'), 'smartdatahub');
+  settings.enabled = false;
+  assert.equal(resolveFulfillmentProviderFromSettings(settings, 'MTN Express'), null);
 });
 
 test('getSmartDataHubTelecelCost / getDatamaxTelecelCost return current Telecel API prices', () => {

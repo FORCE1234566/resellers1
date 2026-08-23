@@ -96,7 +96,7 @@ export default function StoreHomePage() {
   const checkerPath = buildStoreCheckerPath(slug);
 
   const services = (store.serviceImages || []).filter((s) =>
-    ['MTN', 'Telecel', 'AirtelTigo'].includes(s.network)
+    ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'].includes(s.network)
   );
   const afaAvailable = store.afa?.inStock ?? false;
   const checkerAvailable = store.checker?.inStock ?? false;

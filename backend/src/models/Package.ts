@@ -1,7 +1,9 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type Network = 'MTN' | 'Telecel' | 'AirtelTigo';
+export type Network = 'MTN' | 'MTN Express' | 'Telecel' | 'AirtelTigo';
 export type ProductType = 'data' | 'afa' | 'checker';
+
+export const ALL_NETWORKS: Network[] = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'];
 
 export interface IPackage extends Document {
   network: Network;
@@ -21,7 +23,7 @@ const packageSchema = new Schema<IPackage>(
   {
     network: {
       type: String,
-      enum: ['MTN', 'Telecel', 'AirtelTigo'],
+      enum: ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'],
       required: true,
     },
     productType: { type: String, enum: ['data', 'afa', 'checker'], default: 'data' },

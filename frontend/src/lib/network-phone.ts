@@ -1,8 +1,9 @@
-export type GhanaNetwork = 'MTN' | 'Telecel' | 'AirtelTigo';
+export type GhanaNetwork = 'MTN' | 'MTN Express' | 'Telecel' | 'AirtelTigo';
 
 /** Ghana mobile prefixes by network (local 0XXXXXXXXX format). */
 export const NETWORK_PHONE_PREFIXES: Record<GhanaNetwork, readonly string[]> = {
   MTN: ['024', '025', '053', '054', '055', '059'],
+  'MTN Express': ['024', '025', '053', '054', '055', '059'],
   Telecel: ['020', '050'],
   AirtelTigo: ['026', '027', '056', '057'],
 };

@@ -690,8 +690,8 @@ router.post('/packages', asyncHandler(async (req: AuthRequest, res) => {
   const bundleRaw = String(req.body.bundleSize || '').trim();
   const bundleSize = bundleRaw.replace(/^(\d+(?:\.\d+)?)\s*(gb|mb)$/i, (_, n, u) => `${n}${u.toUpperCase()}`);
 
-  if (!['MTN', 'Telecel', 'AirtelTigo'].includes(network)) {
-    throw new AppError('Network must be MTN, Telecel, or AirtelTigo');
+  if (!['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'].includes(network)) {
+    throw new AppError('Network must be MTN, MTN Express, Telecel, or AirtelTigo');
   }
   if (!bundleSize) throw new AppError('Bundle size is required (e.g. 1GB)');
 
@@ -1403,7 +1403,7 @@ router.post('/settings/withdrawal-pool/deposit', requireAdminOtp, asyncHandler(a
 }));
 
 // External fulfillment API routing (per network)
-const FULFILLMENT_NETWORKS = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+const FULFILLMENT_NETWORKS = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
 
 function buildFulfillmentSettingsPayload(settings: Awaited<ReturnType<typeof getSettings>>) {
   const fulfillment = settings.fulfillmentSettings;
@@ -1594,12 +1594,12 @@ router.get('/reports/:type', asyncHandler(async (req, res) => {
 
   switch (type) {
     case 'orders': {
-      const allowedNetworks = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+      const allowedNetworks = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
       const networkFilter = typeof req.query.network === 'string' ? req.query.network : '';
       const orderQuery: Record<string, unknown> = {};
       if (networkFilter) {
         if (!allowedNetworks.includes(networkFilter as (typeof allowedNetworks)[number])) {
-          throw new AppError('Invalid network filter. Use MTN, Telecel, or AirtelTigo.');
+          throw new AppError('Invalid network filter. Use MTN, MTN Express, Telecel, or AirtelTigo.');
         }
         orderQuery.network = networkFilter;
       }

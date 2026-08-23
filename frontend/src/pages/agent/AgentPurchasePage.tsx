@@ -31,6 +31,7 @@ export default function AgentPurchasePage() {
   const [packageId, setPackageId] = useState('');
   const [phone, setPhone] = useState('');
   const [msg, setMsg] = useState('');
+  const [expressBlocked, setExpressBlocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -55,10 +56,12 @@ export default function AgentPurchasePage() {
   }, [network]);
 
   const selected = packages.find((p) => p._id === packageId);
+  const isMtnExpress = network === 'MTN Express';
 
   const handlePurchase = async () => {
     setSubmitting(true);
     setMsg('');
+    setExpressBlocked(false);
     const phoneError = validateNetworkPhone(phone, network);
     if (!network) {
       setMsg('Select a network first');
@@ -71,11 +74,25 @@ export default function AgentPurchasePage() {
       return;
     }
     try {
+      if (isMtnExpress) {
+        const verifyRes = await api.post('/agent/verify-express', { recipientPhone: phone });
+        if (!verifyRes.data?.data?.verified) {
+          setExpressBlocked(true);
+          setMsg(verifyRes.data?.data?.message || 'This number is not verified to buy MTN Express.');
+          return;
+        }
+      }
+
       const res = await api.post('/agent/purchase', { packageId, recipientPhone: phone });
       setMsg(`Order ${res.data.data.orderId} created successfully!`);
       setPhone('');
+      setExpressBlocked(false);
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : 'Purchase failed');
+      const message = err instanceof Error ? err.message : 'Purchase failed';
+      if (isMtnExpress && /not verified to buy MTN Express/i.test(message)) {
+        setExpressBlocked(true);
+      }
+      setMsg(message);
     } finally {
       setSubmitting(false);
     }
@@ -102,6 +119,7 @@ export default function AgentPurchasePage() {
               setPackageId('');
               setPhone('');
               setMsg('');
+              setExpressBlocked(false);
             }}
             options={[
               { value: '', label: 'Choose network...' },
@@ -132,7 +150,10 @@ export default function AgentPurchasePage() {
           <Input
             label="Recipient Number"
             value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            onChange={(e) => {
+              setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+              setExpressBlocked(false);
+            }}
             placeholder={network ? networkPhonePlaceholder(network) : '0XXXXXXXXX'}
           />
           {network && (
@@ -140,7 +161,32 @@ export default function AgentPurchasePage() {
               Only {network} numbers ({networkPhoneHint(network)})
             </p>
           )}
-          {msg && <p className={`text-sm p-3 rounded-lg ${msg.includes('success') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{msg}</p>}
+          {expressBlocked && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-800">
+              <p>This number is not verified to buy MTN Express.</p>
+              <Button
+                type="button"
+                className="mt-3 w-full"
+                onClick={() => {
+                  setNetwork('MTN');
+                  setPackageId('');
+                  setExpressBlocked(false);
+                  setMsg('');
+                }}
+              >
+                Buy here
+              </Button>
+            </div>
+          )}
+          {msg && !expressBlocked && (
+            <p
+              className={`text-sm p-3 rounded-lg ${
+                msg.includes('success') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+              }`}
+            >
+              {msg}
+            </p>
+          )}
           <Button onClick={handlePurchase} loading={submitting} disabled={!packageId || !phone} className="w-full">
             Confirm Purchase
           </Button>

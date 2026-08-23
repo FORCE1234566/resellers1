@@ -7,6 +7,7 @@ import { Order } from '../models/Order';
 import { getOrCreateWallet } from '../services/walletService';
 import { createOrder, validateBulkOrders, processBulkOrders } from '../services/orderService';
 import { getNetworkStockList } from '../services/networkStockService';
+import { checkMtnExpressNumber } from '../services/mtnExpressVerificationService';
 import { getAfaStock } from '../services/afaStockService';
 import { getAfaPackage } from '../services/afaPackageService';
 import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '../config/afa';
@@ -84,6 +85,15 @@ router.post('/purchase', asyncHandler(async (req: AgentApiRequest, res) => {
   });
 
   res.status(201).json({ success: true, data: order });
+}));
+
+// Pre-purchase MTN Express number check
+router.post('/verify-express', asyncHandler(async (req: AgentApiRequest, res) => {
+  const { recipientPhone, phone } = req.body as { recipientPhone?: string; phone?: string };
+  const raw = recipientPhone || phone;
+  if (!raw) throw new AppError('recipientPhone is required');
+  const result = await checkMtnExpressNumber(String(raw));
+  res.json({ success: true, data: result });
 }));
 
 router.get('/afa', asyncHandler(async (req: AgentApiRequest, res) => {

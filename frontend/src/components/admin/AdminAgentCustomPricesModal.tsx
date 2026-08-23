@@ -17,7 +17,7 @@ type PriceRow = {
   maxSellingPrice: number;
 };
 
-const NETWORK_ORDER = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+const NETWORK_ORDER = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
 
 export default function AdminAgentCustomPricesModal({
   agentId,

@@ -424,25 +424,30 @@ Headers:
             <EndpointDoc
               method="GET"
               path="/networks"
-              description="Lists all enabled mobile networks available for purchase."
+              description="Lists all enabled mobile networks available for purchase (includes MTN and MTN Express)."
               response={`{
   "success": true,
-  "data": ["MTN", "Telecel", "AirtelTigo"]
+  "data": [
+    { "network": "MTN", "inStock": true, "imageUrl": "/images/mtn.jpg" },
+    { "network": "MTN Express", "inStock": true, "imageUrl": "/images/mtn.jpg" },
+    { "network": "Telecel", "inStock": true, "imageUrl": "/images/telecel.jpg" },
+    { "network": "AirtelTigo", "inStock": true, "imageUrl": "/images/airteltigo.jpg" }
+  ]
 }`}
             />
 
             <EndpointDoc
               method="GET"
-              path="/packages?network=MTN"
-              description="Lists enabled data bundles. Optional query parameter network filters by MTN, Telecel, or AirtelTigo. Prices shown are Agent prices (debited from your wallet)."
+              path="/packages?network=MTN%20Express"
+              description="Lists enabled data bundles. Optional query parameter network filters by MTN, MTN Express, Telecel, or AirtelTigo. Prices shown are Agent prices (debited from your wallet)."
               response={`{
   "success": true,
   "data": [
     {
       "_id": "665abc...",
-      "network": "MTN",
+      "network": "MTN Express",
       "bundleSize": "1GB",
-      "AgentPrice": 4.73
+      "agentPrice": 4.31
     }
   ]
 }`}
@@ -450,8 +455,26 @@ Headers:
 
             <EndpointDoc
               method="POST"
+              path="/verify-express"
+              description="Check whether a Ghana MTN number is verified for MTN Express before purchase. Call this before POST /purchase when buying MTN Express packages. If verified is false, offer normal MTN instead."
+              request={`{
+  "recipientPhone": "0241234567"
+}`}
+              response={`{
+  "success": true,
+  "data": {
+    "verified": false,
+    "phone": "0241234567",
+    "message": "This number is not verified to buy MTN Express.",
+    "code": "MTN_EXPRESS_NOT_VERIFIED"
+  }
+}`}
+            />
+
+            <EndpointDoc
+              method="POST"
               path="/purchase"
-              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). Your wallet is debited the AgentPrice immediately."
+              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). For MTN Express, the number must pass SDH verification or the API returns code MTN_EXPRESS_NOT_VERIFIED. Your wallet is debited the AgentPrice immediately."
               request={`{
   "packageId": "665abc123def456789012345",
   "recipientPhone": "0241234567"

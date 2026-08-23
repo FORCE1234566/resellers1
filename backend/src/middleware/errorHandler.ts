@@ -5,11 +5,13 @@ import multer from 'multer';
 export class AppError extends Error {
   statusCode: number;
   isOperational: boolean;
+  code?: string;
 
-  constructor(message: string, statusCode = 400) {
+  constructor(message: string, statusCode = 400, code?: string) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = true;
+    this.code = code;
     Error.captureStackTrace(this, this.constructor);
   }
 }
@@ -21,7 +23,11 @@ export const errorHandler = (
   _next: NextFunction
 ): void => {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ success: false, message: err.message });
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      ...(err.code ? { code: err.code } : {}),
+    });
     return;
   }
 

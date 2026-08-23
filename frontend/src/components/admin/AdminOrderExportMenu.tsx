@@ -5,6 +5,7 @@ import { downloadAdminReport, OrderExportNetwork } from '@/lib/api';
 const EXPORT_OPTIONS: { network: OrderExportNetwork; label: string }[] = [
   { network: 'all', label: 'All networks' },
   { network: 'MTN', label: 'MTN only' },
+  { network: 'MTN Express', label: 'MTN Express only' },
   { network: 'Telecel', label: 'Telecel only' },
   { network: 'AirtelTigo', label: 'AirtelTigo only' },
 ];
@@ -32,6 +33,7 @@ export default function AdminOrderExportMenu({
   const pillTone: Record<OrderExportNetwork, string> = {
     all: 'bg-gold/20 text-gold border-gold/40 hover:bg-gold/30',
     MTN: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25',
+    'MTN Express': 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25',
     Telecel: 'bg-red-500/15 text-red-300 border-red-500/30 hover:bg-red-500/25',
     AirtelTigo: 'bg-sky-500/15 text-sky-300 border-sky-500/30 hover:bg-sky-500/25',
   };

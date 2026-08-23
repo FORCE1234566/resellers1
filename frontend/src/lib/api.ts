@@ -123,7 +123,10 @@ api.interceptors.response.use(
         'Your session is not signed in as admin. Sign out, then log in again at /login/admin and retry.';
     }
 
-    return Promise.reject(new Error(message));
+    const apiCode = error.response?.data?.code as string | undefined;
+    const enriched = new Error(message) as Error & { code?: string };
+    if (apiCode) enriched.code = apiCode;
+    return Promise.reject(enriched);
   }
 );
 
@@ -144,7 +147,7 @@ export const setStoredUser = (user: unknown | null) => {
   setStoredUserJson(user ? JSON.stringify(user) : null);
 };
 
-export type OrderExportNetwork = 'all' | 'MTN' | 'Telecel' | 'AirtelTigo';
+export type OrderExportNetwork = 'all' | 'MTN' | 'MTN Express' | 'Telecel' | 'AirtelTigo';
 
 /** Download admin CSV report (orders, withdrawals, etc.) */
 export async function downloadAdminReport(

@@ -5,6 +5,7 @@ import { Network } from '../models/Package';
 /** Ghana mobile prefixes by network (local 0XXXXXXXXX format). */
 export const NETWORK_PHONE_PREFIXES: Record<Network, readonly string[]> = {
   MTN: ['024', '025', '053', '054', '055', '059'],
+  'MTN Express': ['024', '025', '053', '054', '055', '059'],
   Telecel: ['020', '050'],
   AirtelTigo: ['026', '027', '056', '057'],
 };

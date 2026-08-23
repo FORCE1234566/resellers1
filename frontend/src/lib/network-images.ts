@@ -1,5 +1,6 @@
 export const NETWORK_IMAGES: Record<string, string> = {
   MTN: '/images/mtn.jpg',
+  'MTN Express': '/images/mtn.jpg',
   Telecel: '/images/telecel.jpg',
   AirtelTigo: '/images/airteltigo.jpg',
 };

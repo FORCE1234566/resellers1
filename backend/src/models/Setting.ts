@@ -108,6 +108,7 @@ const settingSchema = new Schema<ISetting>(
       globalEnabled: { type: Boolean, default: true },
       networkSettings: {
         MTN: { type: Boolean, default: true },
+        'MTN Express': { type: Boolean, default: true },
         Telecel: { type: Boolean, default: true },
         AirtelTigo: { type: Boolean, default: true },
       },
@@ -129,6 +130,11 @@ const settingSchema = new Schema<ISetting>(
       defaultProvider: { type: String, enum: ['smartdatahub', 'datamax'], default: 'smartdatahub' },
       networkRouting: {
         MTN: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'off' },
+        'MTN Express': {
+          type: String,
+          enum: ['default', 'smartdatahub', 'datamax', 'off'],
+          default: 'smartdatahub',
+        },
         Telecel: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'datamax' },
         AirtelTigo: { type: String, enum: ['default', 'smartdatahub', 'datamax', 'off'], default: 'off' },
       },
@@ -152,7 +158,7 @@ const settingSchema = new Schema<ISetting>(
       {
         network: {
           type: String,
-          enum: ['MTN', 'Telecel', 'AirtelTigo'],
+          enum: ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'],
         },
         imageUrl: String,
         isAvailable: { type: Boolean, default: true },

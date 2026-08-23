@@ -22,13 +22,14 @@ export interface ComplaintOrderContext {
   createdAt: Date;
 }
 
-const NETWORKS: Network[] = ['MTN', 'Telecel', 'AirtelTigo'];
+const NETWORKS: Network[] = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'];
 
 const defaultFulfillmentSettings = (): IFulfillmentSettings => ({
   enabled: true,
   defaultProvider: 'smartdatahub',
   networkRouting: {
     MTN: 'off',
+    'MTN Express': 'smartdatahub',
     Telecel: 'datamax',
     AirtelTigo: 'off',
   },
@@ -39,6 +40,7 @@ const defaultComplaintSettings = () => ({
   globalEnabled: true,
   networkSettings: {
     MTN: true,
+    'MTN Express': true,
     Telecel: true,
     AirtelTigo: true,
   },
@@ -114,6 +116,11 @@ export function migrateFulfillmentSettings(
       normalized = 'datamax';
       dirty = true;
     }
+    // MTN Express always fulfills via Smart Data Hub.
+    if (network === 'MTN Express' && normalized !== 'smartdatahub') {
+      normalized = 'smartdatahub';
+      dirty = true;
+    }
     settings.networkRouting[network] = normalized;
     if (raw !== normalized) dirty = true;
   }
@@ -128,6 +135,11 @@ export function resolveFulfillmentProviderFromSettings(
   // Telecel data always uses Datamax (independent of legacy SDH routing).
   if (network === 'Telecel') {
     return settings.enabled === false ? null : 'datamax';
+  }
+
+  // MTN Express always uses Smart Data Hub.
+  if (network === 'MTN Express') {
+    return settings.enabled === false ? null : 'smartdatahub';
   }
 
   if (!settings.enabled) return null;
@@ -158,6 +170,7 @@ export const getSettings = async () => {
       complaintSettings: defaultComplaintSettings(),
       serviceImages: [
         { network: 'MTN', imageUrl: '/images/mtn.jpg', isAvailable: true },
+        { network: 'MTN Express', imageUrl: '/images/mtn.jpg', isAvailable: true },
         { network: 'Telecel', imageUrl: '/images/telecel.jpg', isAvailable: true },
         { network: 'AirtelTigo', imageUrl: '/images/airteltigo.jpg', isAvailable: true },
       ],
@@ -178,6 +191,15 @@ export const getSettings = async () => {
     settings.complaintSettings.userOverrides = new Map();
     dirty = true;
   }
+  if (!settings.complaintSettings.networkSettings?.['MTN Express']) {
+    settings.complaintSettings.networkSettings = {
+      ...defaultComplaintSettings().networkSettings,
+      ...settings.complaintSettings.networkSettings,
+      'MTN Express': settings.complaintSettings.networkSettings?.['MTN Express'] ?? true,
+    };
+    settings.markModified('complaintSettings');
+    dirty = true;
+  }
   if (!settings.authSettings) {
     settings.authSettings = defaultAuthSettings();
     dirty = true;
@@ -190,7 +212,27 @@ export const getSettings = async () => {
     settings.markModified('authSettings');
     dirty = true;
   }
-  if (dirty) await settings.save();
+
+  const imageNetworks = new Set(settings.serviceImages.map((s) => s.network));
+  for (const network of NETWORKS) {
+    if (!imageNetworks.has(network)) {
+      settings.serviceImages.push({
+        network,
+        imageUrl:
+          network === 'Telecel'
+            ? '/images/telecel.jpg'
+            : network === 'AirtelTigo'
+              ? '/images/airteltigo.jpg'
+              : '/images/mtn.jpg',
+        isAvailable: true,
+      });
+      dirty = true;
+    }
+  }
+  if (dirty) {
+    settings.markModified('serviceImages');
+    await settings.save();
+  }
 
   return settings;
 };

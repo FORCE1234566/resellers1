@@ -8,7 +8,7 @@ import {
   hasParentReseller,
 } from './subResellerPricingService';
 
-export const RESELLER_STORE_NETWORKS = ['MTN', 'Telecel', 'AirtelTigo'] as const;
+export const RESELLER_STORE_NETWORKS = ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'] as const;
 
 export function getCustomPrice(user: IUser, packageId: string): number | undefined {
   const prices = user.resellerStore?.customPrices;

@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 
 const NETWORKS = [
   { value: 'MTN', label: 'MTN' },
+  { value: 'MTN Express', label: 'MTN Express' },
   { value: 'Telecel', label: 'Telecel' },
   { value: 'AirtelTigo', label: 'AirtelTigo' },
 ];
