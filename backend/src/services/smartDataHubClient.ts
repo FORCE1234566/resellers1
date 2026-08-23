@@ -198,6 +198,8 @@ function parseVerifiedFlag(payload: unknown): boolean | null {
     (obj.data as Record<string, unknown> | undefined)?.is_verified,
     (obj.data as Record<string, unknown> | undefined)?.isVerified,
     (obj.data as Record<string, unknown> | undefined)?.eligible,
+    (obj.data as Record<string, unknown> | undefined)?.can_buy,
+    (obj.data as Record<string, unknown> | undefined)?.canBuy,
     (obj.data as Record<string, unknown> | undefined)?.status,
   ];
   for (const value of candidates) {
@@ -216,7 +218,7 @@ function parseVerifiedFlag(payload: unknown): boolean | null {
       }
     }
   }
-  if (typeof obj.success === 'boolean' && obj.data === undefined) return obj.success;
+  // Do not treat a bare success flag as verified — Express requires an explicit eligibility signal.
   return null;
 }
 
@@ -240,17 +242,15 @@ export async function verifySmartDataHubMtnExpressNumber(
   try {
     const res = await smartDataHubRequest<unknown>('POST', relativePath, { body });
     const verified = parseVerifiedFlag(res);
-    if (verified === null) {
-      // Successful HTTP with no explicit flag — treat as verified (SDH accepted the number).
-      return { verified: true, raw: res };
+    // Strict: only an explicit verified/eligible flag may buy. Ambiguous SDH payloads are rejected.
+    if (verified !== true) {
+      return {
+        verified: false,
+        raw: res,
+        message: 'This number is not verified to buy MTN Express.',
+      };
     }
-    return {
-      verified,
-      raw: res,
-      message: verified
-        ? undefined
-        : 'This number is not verified to buy MTN Express.',
-    };
+    return { verified: true, raw: res };
   } catch (err) {
     if (err instanceof SmartDataHubError) {
       if (err.statusCode === 404 || err.statusCode === 422 || err.statusCode === 400) {

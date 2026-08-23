@@ -457,7 +457,7 @@ Headers:
             <EndpointDoc
               method="POST"
               path="/verify-express"
-              description="Smart Data Hub pre-check for MTN Express. Call this on your website before POST /purchase when the customer selected MTN Express. If verified is false, show websiteMessage (or message) on your site and switch the customer to normal MTN using fallbackNetwork."
+              description="Smart Data Hub pre-check for MTN Express. Only numbers that return verified: true may buy Express. Call this on your website before POST /purchase. If verified is false, show websiteMessage on your site and switch the customer to normal MTN using fallbackNetwork."
               request={`{
   "recipientPhone": "0241234567"
 }`}
@@ -497,7 +497,7 @@ if (!check.data.verified) {
             <EndpointDoc
               method="POST"
               path="/purchase"
-              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). For MTN Express, the number must pass SDH verification or the API returns HTTP 400 with code MTN_EXPRESS_NOT_VERIFIED — show that message on your website and offer normal MTN. Your wallet is debited the AgentPrice immediately."
+              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). For MTN Express, only Smart Data Hub–verified numbers can buy — unverified numbers get HTTP 400 with code MTN_EXPRESS_NOT_VERIFIED (show that on your website and offer normal MTN). Your wallet is debited the AgentPrice immediately."
               request={`{
   "packageId": "665abc123def456789012345",
   "recipientPhone": "0241234567"
