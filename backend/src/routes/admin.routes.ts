@@ -1470,6 +1470,18 @@ router.post('/settings/fulfillment/test', asyncHandler(async (req, res) => {
   res.json({ success: true, data: result });
 }));
 
+router.post('/settings/fulfillment/test-verify', asyncHandler(async (req, res) => {
+  const { phone, recipientPhone } = req.body as { phone?: string; recipientPhone?: string };
+  const raw = recipientPhone || phone;
+  if (!raw) throw new AppError('Phone number is required', 400);
+  if (!isSmartDataHubConfigured()) {
+    throw new AppError('Smart Data Hub API is not fully configured on the server', 400);
+  }
+  const { checkMtnExpressNumber } = await import('../services/mtnExpressVerificationService');
+  const result = await checkMtnExpressNumber(String(raw));
+  res.json({ success: true, data: result });
+}));
+
 router.post('/settings/fulfillment/check-balance', asyncHandler(async (req, res) => {
   const provider = String(req.query.provider || 'datamax');
   if (provider !== 'datamax') {

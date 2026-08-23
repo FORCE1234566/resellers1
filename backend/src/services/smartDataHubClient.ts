@@ -233,12 +233,21 @@ function verifyPathCandidates(): string[] {
   const paths = [
     fromEnv,
     '/verify-number',
+    '/orders/verify-number',
     '/numbers/verify',
     '/beneficiary/verify',
+    '/beneficiaries/verify',
     '/mtn-express/verify',
+    '/mtn_express/verify',
     '/express/verify-number',
+    '/verify/mtn-express',
   ].filter(Boolean) as string[];
   return [...new Set(paths)];
+}
+
+function isConfiguredVerifyPath(relativePath: string): boolean {
+  const fromEnv = (process.env.FULFILLMENT_VERIFY_PATH || '').trim();
+  return Boolean(fromEnv) && relativePath === fromEnv;
 }
 
 type VerifyAttempt =
@@ -262,6 +271,10 @@ async function attemptVerifyPath(relativePath: string, body: Record<string, stri
   } catch (err) {
     if (err instanceof SmartDataHubError) {
       if (err.statusCode === 404 || err.statusCode === 405) {
+        return { kind: 'missing', statusCode: err.statusCode };
+      }
+      // Wrong path often returns 401/403 on SDH — keep probing fallback paths.
+      if ((err.statusCode === 401 || err.statusCode === 403) && !isConfiguredVerifyPath(relativePath)) {
         return { kind: 'missing', statusCode: err.statusCode };
       }
       if (err.statusCode === 400 || err.statusCode === 422) {
