@@ -9,7 +9,7 @@ import { getSettings } from '../services/settingsService';
 import { initializePayment } from '../utils/paystack';
 import { isValidGhanaPhone, roundMoney } from '../utils/helpers';
 import { assertNetworkPhone } from '../utils/phone';
-import { assertNetworkInStock } from '../services/networkStockService';
+import { assertNetworkInStock, getNetworkStockList } from '../services/networkStockService';
 import {
   assertMtnExpressNumberVerified,
   checkMtnExpressNumber,
@@ -140,9 +140,11 @@ router.get('/:slug', asyncHandler(async (req, res) => {
   const reseller = await requireOpenResellerStore(req.params.slug, '-password');
   const store = reseller.resellerStore!;
 
-  const settings = await getSettings();
-  const afaStock = await getAfaStock();
-  const checkerStock = await getAllCheckerStock();
+  const [afaStock, checkerStock, networkStock] = await Promise.all([
+    getAfaStock(),
+    getAllCheckerStock(),
+    getNetworkStockList(),
+  ]);
   const signupStatus = await canAcceptSubResellerSignup(reseller);
 
   res.json({
@@ -158,7 +160,11 @@ router.get('/:slug', asyncHandler(async (req, res) => {
       isVerified: store.isVerified,
       memberSince: reseller.createdAt,
       subResellerSignupOpen: signupStatus.signupOpen,
-      serviceImages: settings.serviceImages,
+      serviceImages: networkStock.map((row) => ({
+        network: row.network,
+        imageUrl: row.imageUrl,
+        isAvailable: row.inStock,
+      })),
       afa: {
         inStock: afaStock.inStock,
         imageUrl: afaStock.imageUrl,

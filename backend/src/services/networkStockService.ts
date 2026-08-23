@@ -20,7 +20,8 @@ export type NetworkStockRow = {
 export async function getNetworkStockList(): Promise<NetworkStockRow[]> {
   const settings = await getSettings();
   return STOCK_NETWORKS.map((network) => {
-    const entry = settings.serviceImages.find((s) => s.network === network);
+    const matches = settings.serviceImages.filter((s) => s.network === network);
+    const entry = matches.length ? matches[matches.length - 1] : undefined;
     return {
       network,
       inStock: entry?.isAvailable ?? true,
@@ -31,7 +32,8 @@ export async function getNetworkStockList(): Promise<NetworkStockRow[]> {
 
 export async function isNetworkInStock(network: string): Promise<boolean> {
   const settings = await getSettings();
-  const entry = settings.serviceImages.find((s) => s.network === network);
+  const matches = settings.serviceImages.filter((s) => s.network === network);
+  const entry = matches.length ? matches[matches.length - 1] : undefined;
   return entry?.isAvailable ?? true;
 }
 

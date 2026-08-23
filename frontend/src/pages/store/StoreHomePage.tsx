@@ -8,6 +8,7 @@ import { ChevronDown } from 'lucide-react';
 import StoreContactLinks from '@/components/store/StoreContactLinks';
 import { FeatureCard, ServiceCard, InfoCard } from '@/components/ui/ModernCard';
 import { getNetworkImage } from '@/lib/network-images';
+import { normalizeStoreServices } from '@/lib/store-services';
 import { useParams, Link, useLocation, useSearchParams, useNavigate } from 'react-router';
 import { buildStoreBuyPath, buildStoreHomePath, buildStoreAfaPath, buildStoreCheckerPath, buildStoreBecomeResellerPath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
 import { fetchStore } from '@/lib/store-api';
@@ -95,9 +96,7 @@ export default function StoreHomePage() {
   const afaPath = buildStoreAfaPath(slug);
   const checkerPath = buildStoreCheckerPath(slug);
 
-  const services = (store.serviceImages || [])
-    .filter((s) => ['MTN', 'MTN Express', 'Telecel', 'AirtelTigo'].includes(s.network))
-    .filter((s, idx, arr) => arr.findIndex((x) => x.network === s.network) === idx);
+  const services = normalizeStoreServices(store.serviceImages || []);
   const afaAvailable = store.afa?.inStock ?? false;
   const checkerAvailable = store.checker?.inStock ?? false;
 
