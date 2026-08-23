@@ -287,8 +287,9 @@ export default function AgentApiPage() {
       <div className="mb-8">
         <h1 className="text-xl sm:text-2xl font-bold text-white mb-1">Developer API</h1>
         <p className="text-sm text-gray-400">
-          Connect your website to buy data, MTN AFA registration, and BECE/WASSCE results checkers
-          using your Agent wallet balance.
+          Connect your website to buy data (including MTN Express with Smart Data Hub number
+          verification), MTN AFA registration, and BECE/WASSCE results checkers using your Agent
+          wallet balance.
         </p>
       </div>
 
@@ -456,7 +457,7 @@ Headers:
             <EndpointDoc
               method="POST"
               path="/verify-express"
-              description="Check whether a Ghana MTN number is verified for MTN Express before purchase. Call this before POST /purchase when buying MTN Express packages. If verified is false, offer normal MTN instead."
+              description="Smart Data Hub pre-check for MTN Express. Call this on your website before POST /purchase when the customer selected MTN Express. If verified is false, show websiteMessage (or message) on your site and switch the customer to normal MTN using fallbackNetwork."
               request={`{
   "recipientPhone": "0241234567"
 }`}
@@ -466,25 +467,47 @@ Headers:
     "verified": false,
     "phone": "0241234567",
     "message": "This number is not verified to buy MTN Express.",
-    "code": "MTN_EXPRESS_NOT_VERIFIED"
+    "code": "MTN_EXPRESS_NOT_VERIFIED",
+    "fallbackNetwork": "MTN",
+    "websiteMessage": "This number is not verified for MTN Express. Offer normal MTN data instead."
   }
 }`}
             />
 
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+              <h4 className="text-sm font-semibold text-amber-950">Show reject on your website</h4>
+              <p className="text-sm text-amber-900">
+                When Smart Data Hub rejects a number, display the message and a button to buy normal MTN instead:
+              </p>
+              <CodeBlock
+                code={`// After POST /verify-express
+const check = await res.json();
+if (!check.data.verified) {
+  showBanner(check.data.websiteMessage || check.data.message);
+  // Switch package picker to check.data.fallbackNetwork ("MTN")
+  setNetwork(check.data.fallbackNetwork); // "MTN"
+}
+
+// If you skip verify and POST /purchase directly for MTN Express:
+// HTTP 400 { "success": false, "message": "...", "code": "MTN_EXPRESS_NOT_VERIFIED" }
+// Show that message the same way on your website.`}
+              />
+            </div>
+
             <EndpointDoc
               method="POST"
               path="/purchase"
-              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). For MTN Express, the number must pass SDH verification or the API returns code MTN_EXPRESS_NOT_VERIFIED. Your wallet is debited the AgentPrice immediately."
+              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). For MTN Express, the number must pass SDH verification or the API returns HTTP 400 with code MTN_EXPRESS_NOT_VERIFIED — show that message on your website and offer normal MTN. Your wallet is debited the AgentPrice immediately."
               request={`{
   "packageId": "665abc123def456789012345",
   "recipientPhone": "0241234567"
 }`}
-              response={`// HTTP 201
+              response={`// HTTP 201 success
 {
   "success": true,
   "data": {
     "orderId": "ORD-M1ABC2-XY9Z",
-    "network": "MTN",
+    "network": "MTN Express",
     "bundleSize": "1GB",
     "recipientPhone": "0241234567",
     "sellingPrice": 4.73,
@@ -493,6 +516,13 @@ Headers:
     "source": "Agent_api",
     "createdAt": "2026-06-08T12:00:00.000Z"
   }
+}
+
+// HTTP 400 when Express number is rejected by Smart Data Hub
+{
+  "success": false,
+  "message": "This number is not verified to buy MTN Express.",
+  "code": "MTN_EXPRESS_NOT_VERIFIED"
 }`}
             />
 

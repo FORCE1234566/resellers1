@@ -76,9 +76,19 @@ export default function AgentPurchasePage() {
     try {
       if (isMtnExpress) {
         const verifyRes = await api.post('/agent/verify-express', { recipientPhone: phone });
-        if (!verifyRes.data?.data?.verified) {
+        const verifyData = verifyRes.data?.data as {
+          verified?: boolean;
+          message?: string;
+          websiteMessage?: string;
+          code?: string;
+        };
+        if (!verifyData?.verified) {
           setExpressBlocked(true);
-          setMsg(verifyRes.data?.data?.message || 'This number is not verified to buy MTN Express.');
+          setMsg(
+            verifyData?.websiteMessage ||
+              verifyData?.message ||
+              'This number is not verified to buy MTN Express.'
+          );
           return;
         }
       }
@@ -89,7 +99,11 @@ export default function AgentPurchasePage() {
       setExpressBlocked(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Purchase failed';
-      if (isMtnExpress && /not verified to buy MTN Express/i.test(message)) {
+      const code = (err as Error & { code?: string })?.code;
+      if (
+        isMtnExpress &&
+        (code === 'MTN_EXPRESS_NOT_VERIFIED' || /not verified to buy MTN Express/i.test(message))
+      ) {
         setExpressBlocked(true);
       }
       setMsg(message);
@@ -163,7 +177,10 @@ export default function AgentPurchasePage() {
           )}
           {expressBlocked && (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-800">
-              <p>This number is not verified to buy MTN Express.</p>
+              <p>
+                {msg ||
+                  'This number is not verified for MTN Express. Offer normal MTN data instead.'}
+              </p>
               <Button
                 type="button"
                 className="mt-3 w-full"
@@ -174,7 +191,7 @@ export default function AgentPurchasePage() {
                   setMsg('');
                 }}
               >
-                Buy here
+                Buy here (MTN)
               </Button>
             </div>
           )}

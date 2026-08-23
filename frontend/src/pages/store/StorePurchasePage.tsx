@@ -77,7 +77,10 @@ export default function StorePurchasePage() {
           setExpressBlocked(true);
           setFieldErrors((prev) => ({
             ...prev,
-            phone: verifyRes.data?.data?.message || 'This number is not verified to buy MTN Express.',
+            phone:
+              verifyRes.data?.data?.websiteMessage ||
+              verifyRes.data?.data?.message ||
+              'This number is not verified to buy MTN Express.',
           }));
           return;
         }
@@ -91,7 +94,11 @@ export default function StorePurchasePage() {
       redirectToPaystack(res.data.data.authorizationUrl);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Payment failed';
-      if (isMtnExpress && /not verified to buy MTN Express/i.test(message)) {
+      const code = (err as Error & { code?: string })?.code;
+      if (
+        isMtnExpress &&
+        (code === 'MTN_EXPRESS_NOT_VERIFIED' || /not verified to buy MTN Express/i.test(message))
+      ) {
         setExpressBlocked(true);
         setFieldErrors((prev) => ({ ...prev, phone: message }));
       } else {
