@@ -34,10 +34,6 @@ import { normalizeGhanaPhone, assertNetworkPhone } from '../utils/phone';
 import { redeemPromoCode } from './promoCodeService';
 import { sendAfaRegistrationAdminEmail } from '../utils/email';
 import { refundTransaction, ghsToPesewas } from '../utils/paystack';
-import {
-  assertMtnExpressNumberVerified,
-  isMtnExpressNetwork,
-} from './mtnExpressVerificationService';
 
 const getSettings = async () => {
   let settings = await Setting.findOne();
@@ -223,9 +219,6 @@ export const createOrder = async (input: CreateOrderInput) => {
     }
     recipientPhone = assertNetworkPhone(input.recipientPhone, pkg.network);
     await assertNetworkInStock(pkg.network);
-    if (isMtnExpressNetwork(pkg.network)) {
-      recipientPhone = await assertMtnExpressNumberVerified(recipientPhone);
-    }
   }
 
   const settings = await getSettings();
@@ -562,10 +555,6 @@ export const validateBulkOrders = async (
       throw new AppError(`Duplicate phone number: ${phone}`);
     }
     seenPhones.add(phone);
-
-    if (isMtnExpressNetwork(network)) {
-      phone = await assertMtnExpressNumberVerified(phone);
-    }
 
     const bundle = line.bundleSize.toUpperCase().endsWith('GB')
       ? line.bundleSize.toUpperCase()

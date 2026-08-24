@@ -10,7 +10,7 @@ import { useNavigate, useParams } from 'react-router';
 import { StoreTab } from '@/components/store/StoreLayout';
 import { runValidators, v } from '@/lib/form-validation';
 import { redirectToPaystack } from '@/lib/paystack';
-import { buildStoreBuyPath, buildStoreHomePath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
+import { buildStoreHomePath, persistStoreRef, normalizeStoreSlug } from '@/lib/reseller-store-ref';
 import { sortPackagesByBundleSize } from '@/lib/bundle-size';
 import { networkPhoneHint, networkPhonePlaceholder, validateNetworkPhone } from '@/lib/network-phone';
 
@@ -34,9 +34,6 @@ export default function StorePurchasePage() {
   const [email, setEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [expressBlocked, setExpressBlocked] = useState(false);
-
-  const isMtnExpress = network === 'MTN Express';
 
   useEffect(() => {
     if (!slug) return;
@@ -55,7 +52,6 @@ export default function StorePurchasePage() {
 
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
-    setExpressBlocked(false);
     const errors = runValidators(
       { packageId, phone, email },
       {
@@ -69,38 +65,6 @@ export default function StorePurchasePage() {
 
     setLoading(true);
     try {
-      if (isMtnExpress) {
-        const verifyRes = await api.post(`/store/${slug}/verify-express`, {
-          recipientPhone: phone,
-        });
-        const verifyData = verifyRes.data?.data as {
-          verified?: boolean;
-          unavailable?: boolean;
-          message?: string;
-          websiteMessage?: string;
-          code?: string;
-        };
-        if (verifyData?.unavailable) {
-          alert(
-            verifyData.websiteMessage ||
-              verifyData.message ||
-              'MTN Express verification is temporarily unavailable. Please try again shortly.'
-          );
-          return;
-        }
-        if (!verifyData?.verified) {
-          setExpressBlocked(true);
-          setFieldErrors((prev) => ({
-            ...prev,
-            phone:
-              verifyData?.websiteMessage ||
-              verifyData?.message ||
-              'This number is not verified to buy MTN Express.',
-          }));
-          return;
-        }
-      }
-
       const res = await api.post(`/store/${slug}/purchase/init`, {
         packageId,
         recipientPhone: phone,
@@ -108,17 +72,7 @@ export default function StorePurchasePage() {
       });
       redirectToPaystack(res.data.data.authorizationUrl);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Payment failed';
-      const code = (err as Error & { code?: string })?.code;
-      if (
-        isMtnExpress &&
-        (code === 'MTN_EXPRESS_NOT_VERIFIED' || /not verified to buy MTN Express/i.test(message))
-      ) {
-        setExpressBlocked(true);
-        setFieldErrors((prev) => ({ ...prev, phone: message }));
-      } else {
-        alert(message);
-      }
+      alert(err instanceof Error ? err.message : 'Payment failed');
     } finally {
       setLoading(false);
     }
@@ -127,7 +81,6 @@ export default function StorePurchasePage() {
   const handlePhoneChange = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 10);
     setPhone(digits);
-    setExpressBlocked(false);
     if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: '' }));
     if (digits.length === 10) {
       const networkError = validateNetworkPhone(digits, network);
@@ -167,19 +120,6 @@ export default function StorePurchasePage() {
               {formatCurrency(priceRange.min)} - {formatCurrency(priceRange.max)}
             </p>
           </div>
-
-          {expressBlocked && (
-            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-800">
-              <p>This number is not verified to buy MTN Express.</p>
-              <Button
-                type="button"
-                className="mt-3 w-full"
-                onClick={() => navigate(buildStoreBuyPath(slug, 'MTN'))}
-              >
-                Buy here
-              </Button>
-            </div>
-          )}
 
           <form noValidate onSubmit={handlePurchase} className="space-y-4">
             <Select

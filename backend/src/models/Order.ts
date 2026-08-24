@@ -44,6 +44,10 @@ export interface IOrder extends Document {
   agentId?: mongoose.Types.ObjectId;
   customerEmail?: string;
   network: Network;
+  /** Set when an MTN Express order is auto-switched to MTN after SDH rejection. */
+  originalNetwork?: Network;
+  /** True after Express→MTN fallback has been attempted (prevents loops). */
+  expressFallbackToMtn?: boolean;
   productType: ProductType;
   bundleSize: string;
   packageId: mongoose.Types.ObjectId;
@@ -121,6 +125,8 @@ const orderSchema = new Schema<IOrder>(
     agentId: { type: Schema.Types.ObjectId, ref: 'User' },
     customerEmail: String,
     network: { type: String, required: true },
+    originalNetwork: { type: String },
+    expressFallbackToMtn: { type: Boolean, default: false },
     productType: { type: String, enum: ['data', 'afa', 'checker'], default: 'data' },
     bundleSize: { type: String, required: true },
     packageId: { type: Schema.Types.ObjectId, ref: 'Package', required: true },

@@ -10,11 +10,7 @@ import { initializePayment } from '../utils/paystack';
 import { isValidGhanaPhone, roundMoney } from '../utils/helpers';
 import { assertNetworkPhone } from '../utils/phone';
 import { assertNetworkInStock, getNetworkStockList } from '../services/networkStockService';
-import {
-  assertMtnExpressNumberVerified,
-  checkMtnExpressNumber,
-  isMtnExpressNetwork,
-} from '../services/mtnExpressVerificationService';
+import { checkMtnExpressNumber } from '../services/mtnExpressVerificationService';
 import { assertAfaInStock, getAfaStock } from '../services/afaStockService';
 import { getAfaPackage } from '../services/afaPackageService';
 import { isAfaProduct, AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '../config/afa';
@@ -519,9 +515,6 @@ router.post('/:slug/purchase/init', purchaseLimiter, blockStorePricing, asyncHan
     if (!recipientPhone) throw new AppError('Recipient phone is required');
     phone = assertNetworkPhone(recipientPhone, pkg.network);
     await assertNetworkInStock(pkg.network);
-    if (isMtnExpressNetwork(pkg.network)) {
-      phone = await assertMtnExpressNumberVerified(phone);
-    }
   }
 
   const pkgIdStr = pkg._id.toString();

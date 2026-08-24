@@ -16,6 +16,8 @@ import {
   fetchSmartDataHubBulkStatus,
   isSmartDataHubConfigured,
 } from './smartDataHubClient';
+import { isMtnExpressNetwork } from './mtnExpressVerificationService';
+import { Network } from '../models/Package';
 import {
   DatamaxError,
   createDatamaxOrder,
@@ -56,6 +58,127 @@ function isProviderBalanceError(err: { statusCode?: number; message?: string }):
   return /insufficient|low\s*balance|no\s*(funds|balance|money)|top\s*-?\s*up|wallet.*(empty|low|insufficient)|balance.*(low|insufficient|not\s*enough)/i.test(
     msg
   );
+}
+
+/** SDH rejected this Express create (not balance / not transient outage). */
+function isExpressCreateRejection(err: SmartDataHubError): boolean {
+  if (isProviderBalanceError(err)) return false;
+  if (err.statusCode === 400 || err.statusCode === 422) return true;
+  const code = String(err.errorCode || '').toUpperCase();
+  if (/EXPRESS|VERIFY|INELIGIBLE|REJECT|INVALID_BENEFICIARY|NOT_VERIFIED|SKIP/.test(code)) {
+    return true;
+  }
+  const msg = String(err.message || '');
+  return /not\s*verified|ineligible|express|rejected|cannot\s*buy|not\s*eligible|skip/i.test(msg);
+}
+
+function isFailedOrRejectedProviderStatus(raw?: string | null): boolean {
+  if (!raw?.trim()) return false;
+  const s = raw.toLowerCase().replace(/\s+/g, '_');
+  return (
+    ['failed', 'error', 'rejected', 'skipped'].includes(s) ||
+    s.includes('reject') ||
+    s.includes('skip')
+  );
+}
+
+function canFallbackExpressToMtn(order: IOrder): boolean {
+  if (order.expressFallbackToMtn) return false;
+  if (order.originalNetwork === 'MTN') return false;
+  return isMtnExpressNetwork(order.network) || order.originalNetwork === 'MTN Express';
+}
+
+function mtnFallbackOrderNumber(orderId: string): string {
+  const base = String(orderId || '').replace(/-mtn$/i, '');
+  return `${base}-mtn`.slice(0, 500);
+}
+
+/**
+ * After Smart Data Hub rejects an MTN Express order, switch network to MTN and resubmit once.
+ */
+async function fallbackExpressOrderToMtn(
+  order: IOrder,
+  reason: string
+): Promise<IOrder | null> {
+  if (!canFallbackExpressToMtn(order)) return null;
+  if (!isSmartDataHubConfigured()) return null;
+
+  const prevStatus = order.status;
+  const prevProviderStatus = order.providerStatus || null;
+
+  if (!order.originalNetwork) {
+    order.originalNetwork = (isMtnExpressNetwork(order.network)
+      ? order.network
+      : 'MTN Express') as Network;
+  }
+  order.expressFallbackToMtn = true;
+  order.network = 'MTN';
+  order.providerOrderId = undefined;
+  order.providerBatchId = undefined;
+  order.providerReference = undefined;
+  order.providerStatus = undefined;
+  order.fulfillmentProvider = 'smartdatahub';
+  order.status = 'processing';
+
+  pushHistory(order, {
+    step: 'express_fallback_mtn',
+    label: 'Switched to normal MTN',
+    message: clientStepMessage(
+      reason || 'MTN Express was rejected — resubmitting as normal MTN'
+    ),
+    done: false,
+  });
+
+  await order.save();
+  await notifyStatusChange(order, prevStatus, prevProviderStatus);
+
+  const fallbackOrderId = mtnFallbackOrderNumber(order.orderId);
+
+  try {
+    const response = await createSmartDataHubOrder({
+      orderId: fallbackOrderId,
+      recipientPhone: order.recipientPhone,
+      network: 'MTN',
+      bundleSize: order.bundleSize,
+    });
+    const data = response.data;
+    return applyOrderStatusUpdate(order, {
+      status: 'processing',
+      providerStatus: 'gateway_processing',
+      fulfillmentProvider: 'smartdatahub',
+      providerBatchId: data.batch_id,
+      providerOrderId: data.batch_id,
+      providerReference: data.order_number || fallbackOrderId,
+      stepLabel: 'Gateway Processing',
+      stepMessage: data.message
+        ? clientStepMessage(data.message)
+        : 'Resubmitted as normal MTN after Express rejection',
+    });
+  } catch (err) {
+    if (err instanceof SmartDataHubError && isProviderBalanceError(err)) {
+      return applyOrderStatusUpdate(order, {
+        providerStatus: 'awaiting_provider_balance',
+        fulfillmentProvider: 'smartdatahub',
+        stepLabel: 'Awaiting Provider Balance',
+        stepMessage: 'Queued — processing will resume shortly',
+      });
+    }
+    console.error(
+      '[SDH] Express→MTN fallback submit failed:',
+      order.orderId,
+      err instanceof Error ? err.message : err
+    );
+    return applyOrderStatusUpdate(order, {
+      status: 'failed',
+      providerStatus: 'submit_failed',
+      fulfillmentProvider: 'smartdatahub',
+      stepLabel: 'Fulfillment Failed',
+      stepMessage:
+        err instanceof SmartDataHubError
+          ? clientStepMessage(err.message)
+          : 'Could not resubmit as normal MTN',
+    });
+  }
 }
 
 function isFulfillmentProviderConfigured(provider: FulfillmentProvider): boolean {
@@ -334,11 +457,17 @@ export async function applyOrderStatusUpdate(
 }
 
 async function submitToSmartDataHub(order: IOrder): Promise<IOrder | null> {
+  const submitNetwork = order.network;
+  const submitOrderId =
+    order.expressFallbackToMtn && order.network === 'MTN'
+      ? mtnFallbackOrderNumber(order.orderId)
+      : order.orderId;
+
   try {
     const response = await createSmartDataHubOrder({
-      orderId: order.orderId,
+      orderId: submitOrderId,
       recipientPhone: order.recipientPhone,
-      network: order.network,
+      network: submitNetwork,
       bundleSize: order.bundleSize,
     });
 
@@ -349,7 +478,7 @@ async function submitToSmartDataHub(order: IOrder): Promise<IOrder | null> {
       fulfillmentProvider: 'smartdatahub',
       providerBatchId: data.batch_id,
       providerOrderId: data.batch_id,
-      providerReference: data.order_number || order.orderId,
+      providerReference: data.order_number || submitOrderId,
       stepLabel: 'Gateway Processing',
       stepMessage: data.message ? clientStepMessage(data.message) : 'Order submitted for processing',
     });
@@ -361,6 +490,18 @@ async function submitToSmartDataHub(order: IOrder): Promise<IOrder | null> {
         stepLabel: 'Awaiting Provider Balance',
         stepMessage: 'Queued — processing will resume shortly',
       });
+    }
+
+    if (
+      err instanceof SmartDataHubError &&
+      isMtnExpressNetwork(order.network) &&
+      isExpressCreateRejection(err)
+    ) {
+      const fallen = await fallbackExpressOrderToMtn(
+        order,
+        err.message || 'MTN Express order rejected by provider'
+      );
+      if (fallen) return fallen;
     }
 
     console.error('Smart Data Hub submit failed:', err instanceof Error ? err.message : err);
@@ -675,7 +816,17 @@ async function fetchSmartDataHubStatusForOrder(order: IOrder) {
 
 async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
   if (!isSmartDataHubConfigured()) return null;
-  if (['delivered', 'failed', 'cancelled', 'refunded'].includes(order.status)) return order;
+  if (['delivered', 'cancelled', 'refunded'].includes(order.status)) return order;
+  if (order.status === 'failed') {
+    if (canFallbackExpressToMtn(order)) {
+      const fallen = await fallbackExpressOrderToMtn(
+        order,
+        'MTN Express order failed — switching to normal MTN'
+      );
+      if (fallen) return fallen;
+    }
+    return order;
+  }
 
   if (
     !isSubmittedToProvider(order) ||
@@ -705,6 +856,18 @@ async function syncFromSmartDataHub(order: IOrder): Promise<IOrder | null> {
 
     const resolvedBase = resolveSyncedProviderStatus(order, rawStatus);
     let resolved = resolvedBase;
+
+    // Express rejected later by SDH — switch to normal MTN once instead of failing.
+    if (
+      canFallbackExpressToMtn(order) &&
+      (resolved.status === 'failed' || isFailedOrRejectedProviderStatus(rawStatus))
+    ) {
+      const fallen = await fallbackExpressOrderToMtn(
+        order,
+        `MTN Express delivery status: ${rawStatus}`
+      );
+      if (fallen) return fallen;
+    }
 
     // Exported → notify immediately. Plain pending → only after 3 hours in Ghana daytime (7am–9pm).
     if (isExportedStatus(rawStatus)) {
@@ -1373,6 +1536,18 @@ export async function handleFulfillmentWebhook(body: Record<string, unknown>) {
     (Array.isArray(payload.orders) ? payload.orders : [])
       .map((raw) => asWebhookRecord(raw))
       .find((entry) => entry && String(entry.status || '').trim()) || null;
+
+  // Express rejected via webhook — switch to normal MTN once.
+  if (
+    canFallbackExpressToMtn(order) &&
+    (resolved.status === 'failed' || isFailedOrRejectedProviderStatus(rawStatus))
+  ) {
+    const fallen = await fallbackExpressOrderToMtn(
+      order,
+      `MTN Express delivery status: ${rawStatus}`
+    );
+    if (fallen) return fallen;
+  }
 
   const nextProviderOrderId = String(
     line?.id || payload.provider_order_id || payload.order_id || order.providerOrderId || ''
