@@ -425,14 +425,28 @@ Headers:
             <EndpointDoc
               method="GET"
               path="/networks"
-              description="Lists all enabled mobile networks available for purchase (includes MTN and MTN Express)."
+              description="Lists mobile networks available for purchase. MTN (normal) and MTN Express are separate products — use network / code to show the difference on your website."
               response={`{
   "success": true,
   "data": [
-    { "network": "MTN", "inStock": true, "imageUrl": "/images/mtn.jpg" },
-    { "network": "MTN Express", "inStock": true, "imageUrl": "/images/mtn-express.png" },
-    { "network": "Telecel", "inStock": true, "imageUrl": "/images/telecel.jpg" },
-    { "network": "AirtelTigo", "inStock": true, "imageUrl": "/images/airteltigo.jpg" }
+    {
+      "network": "MTN",
+      "label": "MTN (normal)",
+      "code": "mtn",
+      "description": "Standard MTN data. Orders stay on normal MTN and never switch to Express.",
+      "inStock": true,
+      "imageUrl": "/images/mtn.jpg"
+    },
+    {
+      "network": "MTN Express",
+      "label": "MTN Express",
+      "code": "mtn_express",
+      "description": "MTN Express packages. If the provider rejects Express, fulfillment auto-switches to normal MTN.",
+      "inStock": true,
+      "imageUrl": "/images/mtn-express.png"
+    },
+    { "network": "Telecel", "label": "Telecel", "code": "telecel", "description": "Telecel (Vodafone) data packages.", "inStock": true, "imageUrl": "/images/telecel.jpg" },
+    { "network": "AirtelTigo", "label": "AirtelTigo", "code": "airteltigo", "description": "AirtelTigo data packages.", "inStock": true, "imageUrl": "/images/airteltigo.jpg" }
   ]
 }`}
             />
@@ -440,15 +454,25 @@ Headers:
             <EndpointDoc
               method="GET"
               path="/packages?network=MTN%20Express"
-              description="Lists enabled data bundles. Optional query parameter network filters by MTN, MTN Express, Telecel, or AirtelTigo. Prices shown are Agent prices (debited from your wallet)."
+              description="Lists enabled data bundles. Optional query parameter network filters by MTN, MTN Express, Telecel, or AirtelTigo. Each package includes networkLabel and networkCode so websites can label Express vs normal MTN."
               response={`{
   "success": true,
   "data": [
     {
       "_id": "665abc...",
       "network": "MTN Express",
+      "networkLabel": "MTN Express",
+      "networkCode": "mtn_express",
       "bundleSize": "1GB",
       "agentPrice": 4.31
+    },
+    {
+      "_id": "665def...",
+      "network": "MTN",
+      "networkLabel": "MTN (normal)",
+      "networkCode": "mtn",
+      "bundleSize": "1GB",
+      "agentPrice": 4.50
     }
   ]
 }`}
@@ -486,23 +510,30 @@ Headers:
             <EndpointDoc
               method="POST"
               path="/purchase"
-              description="Buy a single data bundle. The packageId comes from GET /packages. recipientPhone must be a valid Ghana number (10 digits, starts with 0). MTN Express packages are accepted without a pre-verify gate; if Smart Data Hub rejects Express, fulfillment auto-switches to normal MTN. Your wallet is debited the AgentPrice immediately."
+              description="Buy a single data bundle. Use a packageId from GET /packages for either MTN or MTN Express. Response includes purchasedNetwork (what the customer bought) and network (current fulfillment network). If Express is later rejected, network becomes MTN and expressFallbackToMtn becomes true. Wallet is debited immediately."
               request={`{
   "packageId": "665abc123def456789012345",
   "recipientPhone": "0241234567"
 }`}
-              response={`// HTTP 201 success
+              response={`// HTTP 201 — MTN Express purchase
 {
   "success": true,
   "data": {
     "orderId": "ORD-M1ABC2-XY9Z",
     "network": "MTN Express",
+    "networkLabel": "MTN Express",
+    "networkCode": "mtn_express",
+    "purchasedNetwork": "MTN Express",
+    "purchasedNetworkLabel": "MTN Express",
+    "purchasedNetworkCode": "mtn_express",
+    "originalNetwork": null,
+    "expressFallbackToMtn": false,
     "bundleSize": "1GB",
     "recipientPhone": "0241234567",
     "sellingPrice": 4.73,
     "totalAmount": 4.73,
     "status": "pending",
-    "source": "Agent_api",
+    "source": "agent_api",
     "createdAt": "2026-06-08T12:00:00.000Z"
   }
 }`}
@@ -629,24 +660,25 @@ Headers:
             <EndpointDoc
               method="GET"
               path="/orders/:orderId"
-              description="Check the status of an order you created. Only returns orders belonging to your Agent account. For results checkers, checkerDetails includes serial and pin when delivered."
+              description="Check order status. purchasedNetwork is what the customer bought (MTN vs MTN Express). network is the current fulfillment network. After an Express→MTN fallback, purchasedNetwork stays MTN Express while network becomes MTN and expressFallbackToMtn is true."
               response={`{
   "success": true,
   "data": {
     "orderId": "ORD-M1ABC2-XY9Z",
     "network": "MTN",
-    "productType": "checker",
-    "bundleSize": "WASSCE",
+    "networkLabel": "MTN (normal)",
+    "networkCode": "mtn",
+    "purchasedNetwork": "MTN Express",
+    "purchasedNetworkLabel": "MTN Express",
+    "purchasedNetworkCode": "mtn_express",
+    "originalNetwork": "MTN Express",
+    "expressFallbackToMtn": true,
+    "productType": "data",
+    "bundleSize": "1GB",
     "recipientPhone": "0241234567",
-    "customerEmail": "customer@example.com",
-    "sellingPrice": 18.00,
-    "status": "delivered",
+    "sellingPrice": 4.73,
+    "status": "processing",
     "source": "agent_api",
-    "checkerDetails": {
-      "type": "wassce",
-      "serial": "WGC240640047",
-      "pin": "319125067594"
-    },
     "createdAt": "2026-06-08T12:00:00.000Z",
     "updatedAt": "2026-06-08T12:00:05.000Z"
   }
@@ -683,6 +715,13 @@ Headers:
   "providerStatus": "delivered",
   "recipientPhone": "0244123456",
   "network": "MTN",
+  "networkLabel": "MTN (normal)",
+  "networkCode": "mtn",
+  "purchasedNetwork": "MTN Express",
+  "purchasedNetworkLabel": "MTN Express",
+  "purchasedNetworkCode": "mtn_express",
+  "originalNetwork": "MTN Express",
+  "expressFallbackToMtn": true,
   "bundleSize": "1GB",
   "sellingPrice": 4.5,
   "productType": "data",
@@ -692,6 +731,12 @@ Headers:
   "createdAt": "2026-07-29T08:55:00.000Z"
 }`}
             />
+            <p className="text-xs text-gray-500 mt-2">
+              Use <code className="font-mono">purchasedNetwork</code> /{' '}
+              <code className="font-mono">purchasedNetworkCode</code> to show customers whether they
+              bought Express or normal MTN. After Express fallback,{' '}
+              <code className="font-mono">network</code> may be MTN while purchased stays Express.
+            </p>
             <p className="text-xs text-gray-500 mt-2">
               Verify <code className="font-mono">X-TopDeals-Signature</code> with HMAC-SHA256 of the
               raw request body using your secret key.

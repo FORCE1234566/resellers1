@@ -8,6 +8,10 @@ import { getOrCreateWallet } from '../services/walletService';
 import { createOrder, validateBulkOrders, processBulkOrders } from '../services/orderService';
 import { getNetworkStockList } from '../services/networkStockService';
 import { checkMtnExpressNumber } from '../services/mtnExpressVerificationService';
+import {
+  getNetworkApiMeta,
+  serializeAgentApiOrder,
+} from '../services/agentApiOrderSerializer';
 import { getAfaStock } from '../services/afaStockService';
 import { getAfaPackage } from '../services/afaPackageService';
 import { AFA_CHECK_USSD, AFA_PROCESSING_HOURS } from '../config/afa';
@@ -44,7 +48,20 @@ router.get('/wallet', asyncHandler(async (req: AgentApiRequest, res) => {
 // Networks
 router.get('/networks', asyncHandler(async (_req, res) => {
   const stock = await getNetworkStockList();
-  res.json({ success: true, data: stock });
+  res.json({
+    success: true,
+    data: stock.map((row) => {
+      const meta = getNetworkApiMeta(row.network);
+      return {
+        network: row.network,
+        label: meta?.label || row.network,
+        code: meta?.code || String(row.network).toLowerCase().replace(/\s+/g, '_'),
+        description: meta?.description || '',
+        inStock: row.inStock,
+        imageUrl: row.imageUrl,
+      };
+    }),
+  });
 }));
 
 // Packages
@@ -59,12 +76,17 @@ router.get('/packages', asyncHandler(async (req: AgentApiRequest, res) => {
   const agentId = req.user!._id;
   const filtered = packages.filter((p) => inStock.has(p.network));
   const data = await Promise.all(
-    filtered.map(async (p) => ({
-      _id: p._id,
-      network: p.network,
-      bundleSize: p.bundleSize,
-      agentPrice: await getAgentPrice(agentId, p._id, p),
-    }))
+    filtered.map(async (p) => {
+      const meta = getNetworkApiMeta(p.network);
+      return {
+        _id: p._id,
+        network: p.network,
+        networkLabel: meta?.label || p.network,
+        networkCode: meta?.code || String(p.network).toLowerCase().replace(/\s+/g, '_'),
+        bundleSize: p.bundleSize,
+        agentPrice: await getAgentPrice(agentId, p._id, p),
+      };
+    })
   );
   res.json({
     success: true,
@@ -84,7 +106,7 @@ router.post('/purchase', asyncHandler(async (req: AgentApiRequest, res) => {
     source: 'agent_api',
   });
 
-  res.status(201).json({ success: true, data: order });
+  res.status(201).json({ success: true, data: serializeAgentApiOrder(order) });
 }));
 
 // Pre-purchase MTN Express number check
@@ -226,7 +248,10 @@ router.post('/bulk-purchase', asyncHandler(async (req: AgentApiRequest, res) => 
   const { validated } = await validateBulkOrders(parsedLines, network, req.user!._id.toString());
   const orders = await processBulkOrders(validated, req.user!._id.toString(), 'agent_api');
 
-  res.status(201).json({ success: true, data: orders });
+  res.status(201).json({
+    success: true,
+    data: orders.map((order) => serializeAgentApiOrder(order)),
+  });
 }));
 
 // Order status
@@ -238,22 +263,7 @@ router.get('/orders/:orderId', asyncHandler(async (req: AgentApiRequest, res) =>
   if (!order) throw new AppError('Order not found', 404);
   res.json({
     success: true,
-    data: {
-      orderId: order.orderId,
-      network: order.network,
-      productType: order.productType,
-      bundleSize: order.bundleSize,
-      recipientPhone: order.recipientPhone,
-      customerEmail: order.customerEmail,
-      sellingPrice: order.sellingPrice,
-      totalAmount: order.totalAmount,
-      status: order.status,
-      source: order.source,
-      checkerDetails: order.checkerDetails || undefined,
-      afaDetails: order.afaDetails || undefined,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-    },
+    data: serializeAgentApiOrder(order),
   });
 }));
 

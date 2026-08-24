@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { User } from '../models/User';
 import { IOrder } from '../models/Order';
+import { getNetworkApiMeta, getPurchasedNetwork } from './agentApiOrderSerializer';
 
 export type AgentWebhookEvent =
   | 'order.status_updated'
@@ -31,6 +32,9 @@ function resolveEvent(status: string): AgentWebhookEvent {
 }
 
 function buildPayload(order: IOrder, event: AgentWebhookEvent) {
+  const purchasedNetwork = getPurchasedNetwork(order);
+  const purchasedMeta = getNetworkApiMeta(purchasedNetwork);
+  const currentMeta = getNetworkApiMeta(order.network);
   return {
     event,
     orderId: order.orderId,
@@ -38,6 +42,14 @@ function buildPayload(order: IOrder, event: AgentWebhookEvent) {
     providerStatus: order.providerStatus || null,
     recipientPhone: order.recipientPhone,
     network: order.network,
+    networkLabel: currentMeta?.label || order.network,
+    networkCode: currentMeta?.code || String(order.network).toLowerCase().replace(/\s+/g, '_'),
+    purchasedNetwork,
+    purchasedNetworkLabel: purchasedMeta?.label || purchasedNetwork,
+    purchasedNetworkCode:
+      purchasedMeta?.code || String(purchasedNetwork).toLowerCase().replace(/\s+/g, '_'),
+    originalNetwork: order.originalNetwork || null,
+    expressFallbackToMtn: Boolean(order.expressFallbackToMtn),
     bundleSize: order.bundleSize,
     sellingPrice: order.sellingPrice,
     productType: order.productType || 'data',
