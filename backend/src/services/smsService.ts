@@ -86,6 +86,9 @@ export async function sendSms(to: string, message: string): Promise<void> {
 }
 
 export async function sendCheckerSms(to: string, payload: CheckerSmsPayload): Promise<void> {
+  if (!isSmsConfigured()) {
+    throw new Error('SMS is not configured. Set SMS_API_KEY and SMS_SENDER_ID.');
+  }
   await sendSms(to, buildCheckerMessage(payload));
 }
 
